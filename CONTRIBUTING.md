@@ -52,18 +52,8 @@ All four must pass. CI runs them on every pull request and push to `main`.
 
 ## Commit messages
 
-This project uses [Conventional Commits](https://www.conventionalcommits.org/).
-The commit type drives automated versioning and the changelog:
-
-- `feat:` - a new feature (triggers a release)
-- `fix:` - a bug fix (triggers a release)
-- `docs:`, `test:`, `refactor:`, `chore:`, `ci:` - no release on their own
-- `feat!:` / `fix!:`, or a `BREAKING CHANGE:` footer - a breaking change
-
-Example: `feat: add Grafana Loki log writer`.
-
-While the package is pre-1.0, breaking changes bump the minor version and
-features bump the patch version.
+Write clear, descriptive commit messages - there's no required prefix or
+format. Squash-merge PRs down to one or a few meaningful commits.
 
 ## Pull requests
 
@@ -73,20 +63,28 @@ features bump the patch version.
 4. Fill in the pull request template.
 5. Open the PR against `main`; CI must be green before merge.
 
-You do not need to edit `CHANGELOG.md` or bump the version yourself - that is
-automated (see below).
+**Don't bump `version:` in `pubspec.yaml`** unless you mean to trigger a
+release - see below. That's usually left to a maintainer, in its own PR.
 
 ## Releases (maintainers)
 
-Releases are automated with
-[release-please](https://github.com/googleapis/release-please):
+A release is just an ordinary PR that:
 
-1. As Conventional-Commit PRs merge into `main`, release-please maintains a
-   "release" PR that bumps `version:` in `pubspec.yaml` and updates
-   `CHANGELOG.md`.
-2. Merging that release PR creates a `vX.Y.Z` git tag and GitHub release.
-3. The tag triggers `.github/workflows/publish.yml`, which publishes to pub.dev
-   via OIDC (no stored tokens).
+1. Bumps `version:` in `pubspec.yaml`.
+2. Adds a matching entry at the top of `CHANGELOG.md`.
+
+Once that PR merges into `main`, `.github/workflows/ci.yml` notices the new
+version has no matching `vX.Y.Z` git tag yet, and:
+
+1. Creates that tag and a GitHub release (release notes auto-generated from
+   merged PRs since the last tag).
+2. Publishes the new version to pub.dev via OIDC - no stored tokens or
+   secrets, since release and publish both run as jobs in that same workflow
+   run (a tag pushed by the default `GITHUB_TOKEN` can't trigger a *separate*
+   workflow, so publishing happens right there instead of waiting on one).
+
+If a push to `main` doesn't change `version:`, none of this runs - only the
+`test` job does.
 
 ### One-time setup
 
@@ -105,10 +103,4 @@ pub.dev, so the very first release is manual:
    This works the same whether the package belongs to a publisher or a
    personal account.
 
-Then add a repository secret named `RELEASE_PLEASE_TOKEN` - a fine-grained
-personal access token with `contents: write` and `pull-requests: write` on
-this repository. release-please uses it to push the release tag so that the tag
-triggers the publish workflow (a tag pushed with the default `GITHUB_TOKEN`
-would not).
-
-After that, the release-please flow above takes over.
+After that, the flow above takes over for every future release.
