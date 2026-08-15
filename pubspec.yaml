@@ -5,7 +5,7 @@ description: >-
   structured JSON to stdout for GCP, Datadog, Axiom, Elastic, New Relic,
   Splunk, and OpenTelemetry, or any generic JSON collector (AWS CloudWatch,
   Azure Monitor), or a beautiful ANSI console for local development.
-version: 0.2.0
+version: 0.3.0
 homepage: https://github.com/ianheinrich/serverpod_logger_plus
 repository: https://github.com/ianheinrich/serverpod_logger_plus
 issue_tracker: https://github.com/ianheinrich/serverpod_logger_plus/issues

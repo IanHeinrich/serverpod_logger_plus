@@ -174,20 +174,21 @@ play nicely with Zone-based print interception in tests.
 > receiver with a JSON parser). If you just need a schema a specific vendor
 > ingests directly, prefer that vendor's writer.
 
-### Writing your own writer
+### Implementing your own writer
 
-A `LogWriter` is *the entire* production log output - there's no default
-JSON writer running underneath it that you're adding to or filtering.
-Whichever `LogWriter` you implement and pass to `configure` is the only
-thing that decides what gets printed to stdout (or sent over the network)
-for every `session.logger` call. So implementing your own is how you
-replace the built-in JSON shape entirely, whether that's because you need
-a different schema on stdout (e.g. a log collector that isn't listed
-above) or because you need to ship logs somewhere over the network (e.g.
-an HTTP call to a provider with no stdout-based ingestion). `write` is
-dispatched without being awaited by the caller, so slower work like a
-network call won't add latency to the request - just make sure it never
-throws:
+A `LogWriter` is the single unit that decides what a log call turns into.
+Whichever writer you pass to `configure` as the `productionWriter` is the
+*entire* production output - there is no default JSON writer running
+underneath it that you're adding to or filtering. Implement your own when
+you need something the built-in writers don't:
+
+- a **different schema on stdout** (a collector that isn't listed above), or
+- to **ship logs over the network** (an HTTP call to a provider with no
+  stdout-based ingestion).
+
+`write` is dispatched without being awaited by the caller, so slower work
+like a network call won't add latency to the request - just make sure it
+never throws:
 
 ```dart
 class MyLogWriter implements LogWriter {
@@ -219,6 +220,30 @@ ServerpodLoggerPlus.configure(
 
 That's the only wiring required - `session.logger` picks it up
 automatically for every non-development run mode.
+
+### Combining writers (keep the default JSON *and* add your own)
+
+You don't have to choose between a built-in writer and your own logic. To
+keep a built-in structured-JSON writer *and* run extra work on top - say an
+async network push, a metrics counter, or a side-channel alert - wrap them
+in a `MultiLogWriter`. It fans every log call out to each writer you give
+it:
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const MultiLogWriter([
+    GcpJsonLogWriter(),   // still prints the default JSON to stdout
+    PagerDutyLogWriter(), // + your own writer, e.g. an async HTTP call
+  ]),
+);
+```
+
+Your extra writer only needs to do *its* part (the network call) - it
+doesn't have to re-emit the JSON, because `GcpJsonLogWriter` is still in the
+list doing that. Writers are dispatched together rather than one after
+another, so a slow one doesn't hold up the rest, and a failure in one is
+isolated from the others. (Each writer must still not throw of its own
+accord - see above.)
 
 ## Testing
 
