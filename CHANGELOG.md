@@ -1,3 +1,8 @@
+## 0.3.2
+
+- Align repository URLs in `pubspec.yaml`, `README.md`, and `CONTRIBUTING.md`
+  with the canonical `IanHeinrich` GitHub owner casing.
+
 ## 0.3.1
 
 - Add an `example/` demonstrating every built-in writer plus the

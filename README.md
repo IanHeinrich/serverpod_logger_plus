@@ -1,7 +1,7 @@
 # serverpod_logger_plus
 
 [![pub package](https://img.shields.io/pub/v/serverpod_logger_plus.svg)](https://pub.dev/packages/serverpod_logger_plus)
-[![CI](https://github.com/ianheinrich/serverpod_logger_plus/actions/workflows/ci.yml/badge.svg)](https://github.com/ianheinrich/serverpod_logger_plus/actions/workflows/ci.yml)
+[![CI](https://github.com/IanHeinrich/serverpod_logger_plus/actions/workflows/ci.yml/badge.svg)](https://github.com/IanHeinrich/serverpod_logger_plus/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Plug-and-play structured logging for [Serverpod](https://serverpod.dev).
