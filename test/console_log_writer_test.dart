@@ -2,7 +2,7 @@ import 'package:serverpod/serverpod.dart';
 import 'package:serverpod_logger_plus/serverpod_logger_plus.dart';
 import 'package:test/test.dart';
 
-import 'util/capture_print.dart';
+import 'util/writer_test_helpers.dart';
 
 void main() {
   group('Given a ConsoleLogWriter', () {
@@ -12,16 +12,13 @@ void main() {
       'when writing an info log, '
       'then the line contains a green level tag and resets color',
       () async {
-        final lines = await capturePrints(
-          () => writer.write('server started',
-              severity: LogLevel.info, timestamp: DateTime.now()),
-        );
+        final line = await writeLine(writer,
+            message: 'server started', severity: LogLevel.info);
 
-        expect(lines, hasLength(1));
-        expect(lines.single, contains('\x1B[32m'));
-        expect(lines.single, contains('[INFO'));
-        expect(lines.single, contains('server started'));
-        expect(lines.single, contains('\x1B[0m'));
+        expect(line, contains('\x1B[32m'));
+        expect(line, contains('[INFO'));
+        expect(line, contains('server started'));
+        expect(line, contains('\x1B[0m'));
       },
     );
 
@@ -29,12 +26,10 @@ void main() {
       'when writing an error log, '
       'then the level tag is red',
       () async {
-        final lines = await capturePrints(
-          () => writer.write('it broke',
-              severity: LogLevel.error, timestamp: DateTime.now()),
-        );
+        final line = await writeLine(writer,
+            message: 'it broke', severity: LogLevel.error);
 
-        expect(lines.single, contains('\x1B[31m'));
+        expect(line, contains('\x1B[31m'));
       },
     );
 
@@ -42,12 +37,10 @@ void main() {
       'when writing a warning log, '
       'then the level tag is yellow',
       () async {
-        final lines = await capturePrints(
-          () => writer.write('careful',
-              severity: LogLevel.warning, timestamp: DateTime.now()),
-        );
+        final line = await writeLine(writer,
+            message: 'careful', severity: LogLevel.warning);
 
-        expect(lines.single, contains('\x1B[33m'));
+        expect(line, contains('\x1B[33m'));
       },
     );
 
@@ -55,21 +48,18 @@ void main() {
       'when verbose and labels/payload are provided, '
       'then they are pretty-printed on additional lines',
       () async {
-        final lines = await capturePrints(
-          () => writer.write(
-            'request handled',
-            severity: LogLevel.info,
-            timestamp: DateTime.now(),
-            labels: {'traceId': 'abc-123'},
-            payload: {'durationMs': 12},
-          ),
+        final line = await writeLine(
+          writer,
+          message: 'request handled',
+          severity: LogLevel.info,
+          labels: {'traceId': 'abc-123'},
+          payload: {'durationMs': 12},
         );
 
-        final output = lines.single;
-        expect(output, contains('Labels:'));
-        expect(output, contains('traceId'));
-        expect(output, contains('Payload:'));
-        expect(output, contains('durationMs'));
+        expect(line, contains('Labels:'));
+        expect(line, contains('traceId'));
+        expect(line, contains('Payload:'));
+        expect(line, contains('durationMs'));
       },
     );
 
@@ -78,19 +68,16 @@ void main() {
       'then labels and payload are not printed',
       () async {
         const quietWriter = ConsoleLogWriter(verbose: false);
-        final lines = await capturePrints(
-          () => quietWriter.write(
-            'request handled',
-            severity: LogLevel.info,
-            timestamp: DateTime.now(),
-            labels: {'traceId': 'abc-123'},
-            payload: {'durationMs': 12},
-          ),
+        final line = await writeLine(
+          quietWriter,
+          message: 'request handled',
+          severity: LogLevel.info,
+          labels: {'traceId': 'abc-123'},
+          payload: {'durationMs': 12},
         );
 
-        final output = lines.single;
-        expect(output, isNot(contains('Labels:')));
-        expect(output, isNot(contains('Payload:')));
+        expect(line, isNot(contains('Labels:')));
+        expect(line, isNot(contains('Payload:')));
       },
     );
 
@@ -98,19 +85,16 @@ void main() {
       'when an exception and stack trace are provided, '
       'then both are printed',
       () async {
-        final lines = await capturePrints(
-          () => writer.write(
-            'it broke',
-            severity: LogLevel.error,
-            timestamp: DateTime.now(),
-            exception: StateError('bad'),
-            stackTrace: StackTrace.current,
-          ),
+        final line = await writeLine(
+          writer,
+          message: 'it broke',
+          severity: LogLevel.error,
+          exception: StateError('bad'),
+          stackTrace: StackTrace.current,
         );
 
-        final output = lines.single;
-        expect(output, contains('Exception:'));
-        expect(output, contains('bad'));
+        expect(line, contains('Exception:'));
+        expect(line, contains('bad'));
       },
     );
   });

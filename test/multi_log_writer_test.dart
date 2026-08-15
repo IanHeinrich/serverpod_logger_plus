@@ -1,10 +1,8 @@
-import 'dart:convert';
-
 import 'package:serverpod/serverpod.dart';
 import 'package:serverpod_logger_plus/serverpod_logger_plus.dart';
 import 'package:test/test.dart';
 
-import 'util/capture_print.dart';
+import 'util/writer_test_helpers.dart';
 
 /// A minimal [LogWriter] that records the calls it received, for asserting
 /// that [MultiLogWriter] fans out to every writer.
@@ -52,17 +50,13 @@ void main() {
         final custom = _RecordingLogWriter();
         final writer = MultiLogWriter([const GenericJsonLogWriter(), custom]);
 
-        final lines = await capturePrints(
-          () => writer.write(
-            'checkout completed',
-            severity: LogLevel.info,
-            timestamp: DateTime.now(),
-            payload: {'orderId': 'o-1'},
-          ),
+        final json = await writeJson(
+          writer,
+          message: 'checkout completed',
+          severity: LogLevel.info,
+          payload: {'orderId': 'o-1'},
         );
 
-        expect(lines, hasLength(1));
-        final json = jsonDecode(lines.single) as Map<String, dynamic>;
         expect(json['message'], 'checkout completed');
         expect(json['payload'], {'orderId': 'o-1'});
         expect(custom.messages, ['checkout completed']);
