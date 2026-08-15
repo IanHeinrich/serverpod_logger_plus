@@ -3,7 +3,7 @@ description: >-
   Plug-and-play structured logging for Serverpod: dual-routes each log to
   Serverpod Insights and structured JSON on stdout for GCP, Datadog, Elastic,
   and more.
-version: 0.4.0
+version: 0.4.1
 homepage: https://github.com/IanHeinrich/serverpod_logger_plus
 repository: https://github.com/IanHeinrich/serverpod_logger_plus
 issue_tracker: https://github.com/IanHeinrich/serverpod_logger_plus/issues
