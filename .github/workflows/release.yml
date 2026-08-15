@@ -1,12 +1,3 @@
-# Auto-releases a version bump merged to main: when `version:` in pubspec.yaml
-# has no matching git tag yet, this pushes the tag and dispatches publish.yml
-# on it.
-#
-# The tag is pushed with the default GITHUB_TOKEN, which deliberately can't
-# trigger publish.yml's `push: tags` event. That's why we then dispatch
-# publish.yml explicitly - `workflow_dispatch` is the documented exception that
-# GITHUB_TOKEN *can* trigger - targeting the new tag so the publish run's ref
-# is `refs/tags/v<version>`, which is what pub.dev requires.
 name: Release
 
 on:

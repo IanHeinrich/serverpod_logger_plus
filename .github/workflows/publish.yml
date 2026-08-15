@@ -1,13 +1,3 @@
-# Publishes to pub.dev. Runs on either:
-#   - workflow_dispatch on a tag ref - how release.yml auto-publishes a version
-#     bump once its PR merges to main, or
-#   - a manually pushed git tag matching the pattern below, as a fallback:
-#       git tag v1.2.3 && git push origin v1.2.3
-#
-# pub.dev only authorizes publishing when the run's ref is a tag matching the
-# configured pattern (the OIDC token's ref must be `refs/tags/v<version>`), so
-# both triggers resolve to the tag ref. The tag version must match `version:`
-# in pubspec.yaml.
 name: Publish to pub.dev
 
 on:
