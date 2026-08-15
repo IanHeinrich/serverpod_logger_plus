@@ -1,0 +1,58 @@
+# Auto-releases a version bump merged to main: when `version:` in pubspec.yaml
+# has no matching git tag yet, this pushes the tag and dispatches publish.yml
+# on it.
+#
+# The tag is pushed with the default GITHUB_TOKEN, which deliberately can't
+# trigger publish.yml's `push: tags` event. That's why we then dispatch
+# publish.yml explicitly - `workflow_dispatch` is the documented exception that
+# GITHUB_TOKEN *can* trigger - targeting the new tag so the publish run's ref
+# is `refs/tags/v<version>`, which is what pub.dev requires.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tag-and-dispatch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the release tag
+      actions: write # dispatch publish.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - id: check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.new == 'true'
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          git tag "$tag"
+          git push origin "$tag"
+
+      - name: Dispatch publish workflow on the new tag
+        if: steps.check.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publish.yml --ref "v${{ steps.version.outputs.version }}"

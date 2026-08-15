@@ -1,0 +1,58 @@
+# Publishes to pub.dev. Runs on either:
+#   - workflow_dispatch on a tag ref - how release.yml auto-publishes a version
+#     bump once its PR merges to main, or
+#   - a manually pushed git tag matching the pattern below, as a fallback:
+#       git tag v1.2.3 && git push origin v1.2.3
+#
+# pub.dev only authorizes publishing when the run's ref is a tag matching the
+# configured pattern (the OIDC token's ref must be `refs/tags/v<version>`), so
+# both triggers resolve to the tag ref. The tag version must match `version:`
+# in pubspec.yaml.
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+      - name: Run tests
+        run: dart test
+
+  publish:
+    needs: test
+    permissions:
+      id-token: write # required for OIDC authentication to pub.dev
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
