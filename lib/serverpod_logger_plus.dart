@@ -2,8 +2,10 @@
 ///
 /// Routes a flattened log message to Serverpod's session log (so it is
 /// persisted to the database and visible in Serverpod Insights) while
-/// emitting fully structured JSON to stdout for GCP, AWS CloudWatch,
-/// Datadog, or Axiom - or a beautiful ANSI console during local development.
+/// emitting fully structured JSON to stdout for GCP, Datadog, Elastic (ECS),
+/// New Relic, Splunk, OpenTelemetry, or any generic JSON collector (AWS
+/// CloudWatch, Azure Monitor, etc.) - or a beautiful ANSI console during
+/// local development.
 ///
 /// Typical usage:
 ///
@@ -31,7 +33,11 @@ export 'src/log_writer.dart';
 export 'src/logger.dart';
 export 'src/session_logger_extension.dart';
 export 'src/writers/axiom_log_writer.dart';
-export 'src/writers/cloudwatch_json_log_writer.dart';
 export 'src/writers/console_log_writer.dart';
 export 'src/writers/datadog_json_log_writer.dart';
+export 'src/writers/elastic_ecs_log_writer.dart';
 export 'src/writers/gcp_json_log_writer.dart';
+export 'src/writers/generic_json_log_writer.dart';
+export 'src/writers/newrelic_json_log_writer.dart';
+export 'src/writers/otel_json_log_writer.dart';
+export 'src/writers/splunk_json_log_writer.dart';

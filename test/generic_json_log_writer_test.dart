@@ -7,12 +7,12 @@ import 'package:test/test.dart';
 import 'util/capture_print.dart';
 
 void main() {
-  group('Given a CloudWatchJsonLogWriter', () {
-    const writer = CloudWatchJsonLogWriter();
+  group('Given a GenericJsonLogWriter', () {
+    const writer = GenericJsonLogWriter();
 
     test(
       'when writing a warning log with labels and payload, '
-      'then it prints one JSON line matching the CloudWatch schema',
+      'then it prints one flat JSON line',
       () async {
         final lines = await capturePrints(
           () => writer.write(

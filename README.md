@@ -6,7 +6,11 @@
 
 Plug-and-play structured logging for [Serverpod](https://serverpod.dev).
 
-Serverpod can already print JSON to stdout (`sessionLogs.consoleLogFormat: json`), but it's one generic schema - it doesn't speak the reserved fields GCP, CloudWatch, or Datadog actually look for, so you lose severity facets, error grouping, and label-based filtering on arrival.
+Serverpod can already print JSON to stdout
+(`sessionLogs.consoleLogFormat: json`), but it's one generic schema - it
+doesn't speak the reserved fields GCP, Datadog, or Elastic actually look
+for, so you lose severity facets, error grouping, and label-based filtering
+on arrival.
 
 Every log call is dual-routed (the **"Y-Splitter"**):
 
@@ -152,20 +156,38 @@ logging / reserved-attribute conventions:
 | Writer | Target | Notes |
 | --- | --- | --- |
 | `GcpJsonLogWriter` | Google Cloud Logging | Emits `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) and `logging.googleapis.com/labels`, auto-parsed from stdout by the Cloud Logging agent. |
-| `CloudWatchJsonLogWriter` | AWS CloudWatch Logs | Emits `level`, `timestamp`, `labels`, `payload`. |
+| `GenericJsonLogWriter` | AWS CloudWatch, Azure Monitor / Container Insights, and any agent that indexes arbitrary stdout JSON (Fluent Bit, Vector, Logstash, ...) | Emits a flat, provider-neutral object: `message`, `level`, `timestamp`, plus optional `labels`/`payload`. |
 | `DatadogJsonLogWriter` | Datadog Log Management | Emits `status` (Datadog's reserved severity attribute - *not* `level`), `@timestamp`, `error.message`/`error.kind`/`error.stack` on exceptions. |
 | `AxiomLogWriter` | Axiom / generic JSON collectors (e.g. Better Stack) | Emits `_time`, `level`, and a merged `data` object combining `payload` and `labels`. |
+| `ElasticEcsLogWriter` | Elastic Stack / Elastic Cloud (ECS) | Emits Elastic Common Schema fields: `@timestamp`, `log.level`, `message`, and `error.message`/`error.type`/`error.stack_trace`. Picked up by Filebeat / Elastic Agent. |
+| `NewRelicJsonLogWriter` | New Relic Logs | Emits `timestamp`, `message`, `level`, and `error.message`/`error.class`/`error.stack`, collected from stdout by New Relic's log forwarders. |
+| `SplunkJsonLogWriter` | Splunk | Emits flat JSON (`time`, `severity`, `message`) that a Splunk forwarder indexes with a JSON source type - not the HEC `{"event": {...}}` envelope, which is only for POSTing to HEC directly. |
+| `OtelJsonLogWriter` | OpenTelemetry Collector (OTLP/JSON) | Emits an OTel `LogRecord` (`timeUnixNano`, `severityNumber`/`severityText`, `body`, `attributes`). Intended to be collected by an OpenTelemetry Collector pipeline (see note below). |
 | `ConsoleLogWriter` | Local development | ANSI-colored, human-readable console output. Automatically used whenever `runMode == development`. |
 
 All writers only ever call `print(...)` (never `stdout.writeln`), so they
 play nicely with Zone-based print interception in tests.
 
+> **Note on `OtelJsonLogWriter`:** a bare OTLP/JSON `LogRecord` on stdout is
+> not a turn-key ingestion path on its own - it's meant to be collected by an
+> OpenTelemetry Collector whose pipeline maps these fields (e.g. a `filelog`
+> receiver with a JSON parser). If you just need a schema a specific vendor
+> ingests directly, prefer that vendor's writer.
+
 ### Writing your own writer
 
-Implement `LogWriter` to support any other destination. `write` is
-dispatched without being awaited by the caller, so it's safe to perform
-slower work (e.g. a network call) here without adding latency to the
-request - just make sure it never throws:
+A `LogWriter` is *the entire* production log output - there's no default
+JSON writer running underneath it that you're adding to or filtering.
+Whichever `LogWriter` you implement and pass to `configure` is the only
+thing that decides what gets printed to stdout (or sent over the network)
+for every `session.logger` call. So implementing your own is how you
+replace the built-in JSON shape entirely, whether that's because you need
+a different schema on stdout (e.g. a log collector that isn't listed
+above) or because you need to ship logs somewhere over the network (e.g.
+an HTTP call to a provider with no stdout-based ingestion). `write` is
+dispatched without being awaited by the caller, so slower work like a
+network call won't add latency to the request - just make sure it never
+throws:
 
 ```dart
 class MyLogWriter implements LogWriter {
@@ -185,6 +207,18 @@ class MyLogWriter implements LogWriter {
   }
 }
 ```
+
+Then pass an instance to `configure` as `productionWriter`, exactly like
+the built-in writers in the Quickstart above:
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const MyLogWriter(),
+);
+```
+
+That's the only wiring required - `session.logger` picks it up
+automatically for every non-development run mode.
 
 ## Testing
 
