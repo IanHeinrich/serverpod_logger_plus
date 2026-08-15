@@ -28,11 +28,16 @@ class NewRelicJsonLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final entry = <String, dynamic>{
       'timestamp': timestamp.toUtc().toIso8601String(),
       'message': message,
       'level': severity.name,
+      // New Relic logs-in-context reserved trace fields.
+      if (traceId != null) 'trace.id': traceId,
+      if (spanId != null) 'span.id': spanId,
       if (labels != null && labels.isNotEmpty) 'labels': labels,
       if (payload != null && payload.isNotEmpty) 'payload': toJsonSafe(payload),
       if (exception != null) ...{

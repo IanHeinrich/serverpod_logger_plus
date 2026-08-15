@@ -29,11 +29,16 @@ class ElasticEcsLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final entry = <String, dynamic>{
       '@timestamp': timestamp.toUtc().toIso8601String(),
       'log.level': _level(severity),
       'message': message,
+      // ECS reserved trace fields for APM log correlation.
+      if (traceId != null) 'trace.id': traceId,
+      if (spanId != null) 'span.id': spanId,
       // ECS `labels` must be a flat object of string key/values.
       if (labels != null && labels.isNotEmpty) 'labels': labels,
       if (payload != null && payload.isNotEmpty) 'payload': toJsonSafe(payload),

@@ -30,6 +30,9 @@ class LoggerPlus {
   final Map<String, String> _boundLabels;
   final Map<String, dynamic> _boundPayload;
   final LogLevel? _minimumLevel;
+  final String? _traceId;
+  final String? _spanId;
+  bool _requestLoggingRegistered = false;
 
   LoggerPlus(
     this._session, {
@@ -37,10 +40,14 @@ class LoggerPlus {
     Map<String, String>? labels,
     Map<String, dynamic>? payload,
     LogLevel? minimumLevel,
+    String? traceId,
+    String? spanId,
   })  : _writer = writer,
         _boundLabels = Map.unmodifiable(labels ?? const {}),
         _boundPayload = Map.unmodifiable(payload ?? const {}),
-        _minimumLevel = minimumLevel;
+        _minimumLevel = minimumLevel,
+        _traceId = traceId,
+        _spanId = spanId;
 
   /// Labels currently bound to this logger.
   Map<String, String> get boundLabels => _boundLabels;
@@ -48,6 +55,13 @@ class LoggerPlus {
   /// Payload currently bound to this logger. This is merged into the payload
   /// of every log call made through this logger.
   Map<String, dynamic> get boundPayload => _boundPayload;
+
+  /// Distributed-trace id bound to this logger, or null. Passed to the
+  /// [LogWriter] on every log call so it can populate its reserved trace field.
+  String? get traceId => _traceId;
+
+  /// Distributed-trace span id bound to this logger, or null.
+  String? get spanId => _spanId;
 
   /// Returns a new [LoggerPlus] with [labels] and [payload] merged on top of
   /// the context already bound to this logger. This logger is left unchanged.
@@ -59,7 +73,35 @@ class LoggerPlus {
       labels: {..._boundLabels, ...?labels},
       payload: {..._boundPayload, ...?payload},
       minimumLevel: _minimumLevel,
+      traceId: _traceId,
+      spanId: _spanId,
     );
+  }
+
+  /// Emits one structured "request completed" record when this logger's
+  /// [Session] closes: endpoint, method, and duration, dispatched to the
+  /// [LogWriter] (and Serverpod's session log) like any other call. This
+  /// bridges Serverpod's built-in database session log to your structured
+  /// stdout sink; it does not know whether the call threw (the close hook
+  /// isn't given the error), so keep using [error]/[fatal] in catch blocks
+  /// for failures. Idempotent per logger instance.
+  void logRequestOnClose() {
+    if (_requestLoggingRegistered) return;
+    _requestLoggingRegistered = true;
+    _session.addWillCloseListener((session) {
+      final method = session.method;
+      return log(
+        'Request completed',
+        severity: LogLevel.info,
+        labels: const {'event': 'request_completed'},
+        payload: {
+          'endpoint': session.endpoint,
+          if (method != null) 'method': method,
+          'durationMs': session.duration.inMilliseconds,
+          'sessionId': session.sessionId.toString(),
+        },
+      );
+    });
   }
 
   /// Logs a debug-level message.
@@ -167,6 +209,8 @@ class LoggerPlus {
       labels: mergedLabels.isEmpty ? null : mergedLabels,
       exception: exception,
       stackTrace: stackTrace,
+      traceId: _traceId,
+      spanId: _spanId,
     );
   }
 
@@ -184,6 +228,8 @@ class LoggerPlus {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) {
     unawaited(
       _writer
@@ -195,6 +241,8 @@ class LoggerPlus {
         labels: labels,
         exception: exception,
         stackTrace: stackTrace,
+        traceId: traceId,
+        spanId: spanId,
       )
           .catchError((Object error, StackTrace writerStackTrace) {
         stderr

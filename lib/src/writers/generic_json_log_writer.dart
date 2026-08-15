@@ -36,11 +36,15 @@ class GenericJsonLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final entry = <String, dynamic>{
       'message': message,
       'level': severity.name.toUpperCase(),
       'timestamp': timestamp.toUtc().toIso8601String(),
+      if (traceId != null) 'traceId': traceId,
+      if (spanId != null) 'spanId': spanId,
       if (labels != null && labels.isNotEmpty) 'labels': labels,
       if (payload != null && payload.isNotEmpty) 'payload': toJsonSafe(payload),
       if (exception != null) 'exception': exception.toString(),

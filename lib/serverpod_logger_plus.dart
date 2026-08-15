@@ -32,6 +32,7 @@ export 'src/config.dart';
 export 'src/log_writer.dart';
 export 'src/logger.dart';
 export 'src/session_logger_extension.dart';
+export 'src/trace_context.dart';
 export 'src/writers/axiom_log_writer.dart';
 export 'src/writers/console_log_writer.dart';
 export 'src/writers/datadog_json_log_writer.dart';

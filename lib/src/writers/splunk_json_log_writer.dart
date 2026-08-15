@@ -31,11 +31,15 @@ class SplunkJsonLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final entry = <String, dynamic>{
       'time': timestamp.toUtc().toIso8601String(),
       'severity': severity.name.toUpperCase(),
       'message': message,
+      if (traceId != null) 'trace_id': traceId,
+      if (spanId != null) 'span_id': spanId,
       if (labels != null && labels.isNotEmpty) 'labels': labels,
       if (payload != null && payload.isNotEmpty) 'payload': toJsonSafe(payload),
       if (exception != null) 'exception': exception.toString(),
