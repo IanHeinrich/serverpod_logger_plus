@@ -1,3 +1,31 @@
+## 0.4.0
+
+- New `session.bindLogger(labels:, payload:)` that enriches `session.logger` in
+  place, so every later `session.logger` call on that session carries the bound
+  context without threading a logger through your call stack.
+- Automatic request logging: pass `logRequests: true` to
+  `ServerpodLoggerPlus.configure` (or call `session.logger.logRequestOnClose()`
+  per request) to emit one structured `Request completed` record (endpoint,
+  method, duration) to your `LogWriter` when a session closes.
+- Distributed trace context: pass `bindTraceContext: true` and `session.logger`
+  reads the incoming request's trace headers and binds `traceId`/`spanId` on
+  every log call. Recognizes W3C `traceparent`, GCP `X-Cloud-Trace-Context`,
+  AWS `X-Amzn-Trace-Id`, and Datadog `x-datadog-trace-id`/`x-datadog-parent-id`.
+  Exposes `extractTraceContext(session)` and a `traceContextExtractor` override
+  for proprietary headers.
+- Each writer now maps bound trace context into its provider's reserved trace
+  field (OTel native `traceId`/`spanId`, ECS and New Relic `trace.id`/`span.id`,
+  Datadog `dd.trace_id`/`dd.span_id`, GCP `logging.googleapis.com/trace`).
+  `GcpJsonLogWriter` gains a `projectId` argument to format the reserved trace
+  resource name for automatic log-to-trace linking.
+- Flushing for async writers: implement the new `FlushableLogWriter` to drain
+  in-flight work, and call `ServerpodLoggerPlus.flush()` from your shutdown path
+  before `pod.shutdown()`. `MultiLogWriter` fans `flush()` out to flushable
+  children.
+- **Breaking:** `LogWriter.write` gained optional `traceId`/`spanId` named
+  parameters. Custom writers that use `implements LogWriter` must add them to
+  their `write` signature.
+
 ## 0.3.3
 
 - Fix the broken CI badge in `README.md` on pub.dev (point it at the renamed

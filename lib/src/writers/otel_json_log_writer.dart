@@ -34,6 +34,8 @@ class OtelJsonLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final attributes = <Map<String, dynamic>>[
       if (payload != null)
@@ -53,6 +55,9 @@ class OtelJsonLogWriter implements LogWriter {
       'severityNumber': _severityNumber(severity),
       'severityText': _severityText(severity),
       'body': {'stringValue': message},
+      // Native LogRecord trace fields, so a collector links logs to spans.
+      if (traceId != null) 'traceId': traceId,
+      if (spanId != null) 'spanId': spanId,
       if (attributes.isNotEmpty) 'attributes': attributes,
     };
 

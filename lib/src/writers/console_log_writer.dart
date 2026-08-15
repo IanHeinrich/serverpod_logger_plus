@@ -33,6 +33,8 @@ class ConsoleLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final formattedTimestamp = _dim(timestamp.toIso8601String());
     final levelTag =
@@ -40,6 +42,10 @@ class ConsoleLogWriter implements LogWriter {
 
     final buffer = StringBuffer('$formattedTimestamp $levelTag $message');
 
+    if (traceId != null) {
+      final span = spanId != null ? ' span=$spanId' : '';
+      buffer.write(_dim(' (trace=$traceId$span)'));
+    }
     if (verbose && labels != null && labels.isNotEmpty) {
       buffer.write('\n${_dim('  Labels: ${_prettyJson(labels)}')}');
     }

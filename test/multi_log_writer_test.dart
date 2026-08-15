@@ -18,6 +18,8 @@ class _RecordingLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     messages.add(message);
   }
@@ -98,6 +100,8 @@ class _ThrowingLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     throw StateError('boom');
   }

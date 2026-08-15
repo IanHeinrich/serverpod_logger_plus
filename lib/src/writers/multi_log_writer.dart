@@ -22,7 +22,7 @@ import '../log_writer.dart';
 /// rather than one after another, so a slow writer doesn't hold up the others.
 /// As with any [LogWriter], each one must not throw - a failure in one writer
 /// is isolated so it can't stop the rest from running.
-class MultiLogWriter implements LogWriter {
+class MultiLogWriter implements FlushableLogWriter {
   /// The writers to dispatch every log call to, in the given order.
   final List<LogWriter> writers;
 
@@ -38,6 +38,8 @@ class MultiLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     await Future.wait([
       for (final writer in writers)
@@ -49,7 +51,17 @@ class MultiLogWriter implements LogWriter {
               labels: labels,
               exception: exception,
               stackTrace: stackTrace,
+              traceId: traceId,
+              spanId: spanId,
             )),
+    ]);
+  }
+
+  @override
+  Future<void> flush() async {
+    await Future.wait([
+      for (final writer in writers)
+        if (writer is FlushableLogWriter) Future(() => writer.flush()),
     ]);
   }
 }

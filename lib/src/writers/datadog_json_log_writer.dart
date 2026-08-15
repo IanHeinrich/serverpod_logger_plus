@@ -28,11 +28,18 @@ class DatadogJsonLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final entry = <String, dynamic>{
       'message': message,
       'status': _status(severity),
       '@timestamp': timestamp.toUtc().toIso8601String(),
+      // Datadog trace-correlation attributes. Datadog expects 64-bit decimal
+      // ids; these pass through as received, so they link when the incoming
+      // trace header is Datadog's own.
+      if (traceId != null) 'dd.trace_id': traceId,
+      if (spanId != null) 'dd.span_id': spanId,
       if (labels != null && labels.isNotEmpty) 'labels': labels,
       if (payload != null && payload.isNotEmpty) 'payload': toJsonSafe(payload),
       if (exception != null) ...{

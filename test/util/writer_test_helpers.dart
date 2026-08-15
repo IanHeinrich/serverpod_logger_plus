@@ -20,6 +20,8 @@ Future<String> writeLine(
   Map<String, String>? labels,
   Object? exception,
   StackTrace? stackTrace,
+  String? traceId,
+  String? spanId,
 }) async {
   final lines = await capturePrints(
     () => writer.write(
@@ -30,6 +32,8 @@ Future<String> writeLine(
       labels: labels,
       exception: exception,
       stackTrace: stackTrace,
+      traceId: traceId,
+      spanId: spanId,
     ),
   );
   expect(lines, hasLength(1));
@@ -46,6 +50,8 @@ Future<Map<String, dynamic>> writeJson(
   Map<String, String>? labels,
   Object? exception,
   StackTrace? stackTrace,
+  String? traceId,
+  String? spanId,
 }) async {
   final line = await writeLine(
     writer,
@@ -56,6 +62,8 @@ Future<Map<String, dynamic>> writeJson(
     labels: labels,
     exception: exception,
     stackTrace: stackTrace,
+    traceId: traceId,
+    spanId: spanId,
   );
   return jsonDecode(line) as Map<String, dynamic>;
 }

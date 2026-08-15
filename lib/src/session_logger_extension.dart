@@ -5,6 +5,7 @@ import 'package:serverpod/serverpod.dart';
 import 'config.dart';
 import 'log_writer.dart';
 import 'logger.dart';
+import 'trace_context.dart';
 import 'writers/console_log_writer.dart';
 
 final Expando<LoggerPlus> _loggersBySession =
@@ -34,13 +35,37 @@ extension SessionLoggerExtension on Session {
       _warnIfDoubleConsoleLoggingRisk();
     }
 
+    final trace = ServerpodLoggerPlus.bindTraceContext
+        ? (ServerpodLoggerPlus.traceContextExtractor ??
+            extractTraceContext)(this)
+        : const <String, String>{};
     final logger = LoggerPlus(
       this,
       writer: writer,
       minimumLevel: ServerpodLoggerPlus.minimumLevel,
+      traceId: trace['traceId'],
+      spanId: trace['spanId'],
     );
     _loggersBySession[this] = logger;
+    if (ServerpodLoggerPlus.logRequests) {
+      logger.logRequestOnClose();
+    }
     return logger;
+  }
+
+  /// Enriches the memoized `session.logger` in place: every later
+  /// `session.logger` on this [Session] returns a logger carrying [labels] and
+  /// [payload], without threading the returned instance through your call
+  /// stack. Unlike [LoggerPlus.bind] (which returns a new logger and leaves
+  /// the receiver untouched), this re-points what `session.logger` resolves
+  /// to for the rest of the request. Returns the enriched logger.
+  LoggerPlus bindLogger({
+    Map<String, String>? labels,
+    Map<String, dynamic>? payload,
+  }) {
+    final bound = logger.bind(labels: labels, payload: payload);
+    _loggersBySession[this] = bound;
+    return bound;
   }
 
   /// Serverpod has its own built-in stdout writer for `session.log` calls

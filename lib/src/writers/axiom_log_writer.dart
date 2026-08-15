@@ -24,6 +24,8 @@ class AxiomLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     final data = <String, dynamic>{...?payload, ...?labels};
 
@@ -31,6 +33,8 @@ class AxiomLogWriter implements LogWriter {
       '_time': timestamp.toUtc().toIso8601String(),
       'message': message,
       'level': severity.name,
+      if (traceId != null) 'trace_id': traceId,
+      if (spanId != null) 'span_id': spanId,
       if (data.isNotEmpty) 'data': toJsonSafe(data),
       if (exception != null) 'exception': exception.toString(),
       if (stackTrace != null) 'stackTrace': stackTrace.toString(),

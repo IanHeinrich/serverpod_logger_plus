@@ -87,6 +87,87 @@ This gates only this package's writer. Serverpod's own session log is
 unaffected and continues to be filtered by Serverpod's log settings, so
 dropped-from-stdout entries can still reach the database/Insights.
 
+### Automatic request logging
+
+Serverpod already writes one session-log row per completed call to its
+database (duration, query timings, uncaught exceptions), surfaced in
+Insights - but that record never goes through your `LogWriter`, so it doesn't
+reach your structured stdout sink. Set `logRequests: true` to bridge the gap:
+every session that touches `session.logger` emits one structured
+`Request completed` record (endpoint, method, duration) to your writer when it
+closes.
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const GcpJsonLogWriter(),
+  logRequests: true,
+);
+```
+
+You can also opt in for a single request explicitly, without the global flag,
+by calling `session.logger.logRequestOnClose()` in a handler - it's idempotent
+per session.
+
+Two caveats worth knowing:
+
+- The completion record is emitted only if `session.logger` is accessed during
+  the request (that's the hook point - Serverpod's HTTP middleware runs before
+  a `Session` exists, so it isn't the right layer for session-scoped logs).
+- Serverpod's session-close hook isn't given the call's error, so this record
+  can't say whether the call *failed*. Keep using
+  `session.logger.error(...)`/`fatal(...)` in your catch blocks for failures.
+
+### Binding distributed trace context
+
+Serverpod has its own per-session id but doesn't propagate standard
+distributed-trace headers onto your logs. Set `bindTraceContext: true` and
+`session.logger` reads the incoming request's trace headers and binds
+`traceId`/`spanId` as labels on every log call for that session, so your
+aggregator can pivot from a log line to the full trace.
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const GcpJsonLogWriter(projectId: 'my-gcp-project'),
+  bindTraceContext: true,
+);
+```
+
+The first recognized header wins, in this order: W3C `traceparent`, GCP
+`X-Cloud-Trace-Context`, AWS `X-Amzn-Trace-Id`, then Datadog
+`x-datadog-trace-id`/`x-datadog-parent-id`. Sessions without a request
+(internal or future-call sessions) are simply left untagged. You can also call
+`extractTraceContext(session)` yourself if you want the ids without the global
+flag.
+
+For a proprietary trace header (or any non-standard encoding), pass your own
+`traceContextExtractor` to replace the built-in parsing:
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const GcpJsonLogWriter(projectId: 'my-gcp-project'),
+  bindTraceContext: true,
+  traceContextExtractor: (session) {
+    final id = session.request?.headers['x-corp-trace-id']?.first;
+    return id == null ? const {} : {'traceId': id};
+  },
+);
+```
+
+Return `extractTraceContext(session)` from inside your extractor if you want to
+keep the standard-header parsing as a fallback.
+
+Each built-in writer maps the bound `traceId`/`spanId` into its provider's
+reserved trace field - OTel's native `LogRecord` `traceId`/`spanId`, ECS and
+New Relic `trace.id`/`span.id`, Datadog `dd.trace_id`/`dd.span_id`, GCP
+`logging.googleapis.com/trace` - so your backend links the log line to its
+trace automatically. Two provider notes:
+
+- `GcpJsonLogWriter` needs your project id to build the reserved trace field:
+  `GcpJsonLogWriter(projectId: '...')`. Without it, the trace id is emitted as
+  a label instead (searchable, but without automatic log-to-trace linking).
+- Datadog expects 64-bit decimal ids; the id is passed through as received, so
+  it links when the incoming trace header is Datadog's own.
+
 ### Avoiding double logging in production
 
 Separately from this package, Serverpod's own `Session.log` can *also*
@@ -128,19 +209,22 @@ session.logger.fatal('message', exception: e, stackTrace: st, payload: {...});
 
 ### Binding context
 
-Use `bind` to attach labels/payload that should be included on every
-subsequent call made through the returned logger, without repeating them:
+Use `session.bindLogger(...)` to attach labels/payload that should be included
+on every subsequent `session.logger` call, so you don't have to repeat them -
+or thread a logger object through your call stack. It enriches `session.logger`
+in place for the rest of the request:
 
 ```dart
-final requestLogger = session.logger.bind(
-  labels: {'requestId': requestId},
-);
+session.bindLogger(labels: {'requestId': requestId});
 
-await requestLogger.info('Starting request');
-await requestLogger.info('Finished request'); // still tagged with requestId
+await session.logger.info('Starting request'); // tagged with requestId
+await session.logger.info('Finished request'); // still tagged, anywhere
 ```
 
-`bind` returns a new `LoggerPlus`; the original is left unchanged.
+Every later `session.logger` on that `Session` carries the bound context.
+`bindLogger` also returns the enriched logger if you want a direct reference,
+but you don't need to keep it - the point is the side effect on
+`session.logger`.
 
 > Note: the class is named `LoggerPlus`, not `Logger` - `package:serverpod`
 > already exports its own `Logger` (from `relic_core`, used internally for
@@ -155,7 +239,7 @@ logging / reserved-attribute conventions:
 
 | Writer | Target | Notes |
 | --- | --- | --- |
-| `GcpJsonLogWriter` | Google Cloud Logging | Emits `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) and `logging.googleapis.com/labels`, auto-parsed from stdout by the Cloud Logging agent. |
+| `GcpJsonLogWriter` | Google Cloud Logging | Emits `severity` (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) and `logging.googleapis.com/labels`, auto-parsed from stdout by the Cloud Logging agent. Pass `projectId` to also emit `logging.googleapis.com/trace` for log-to-trace linking. |
 | `GenericJsonLogWriter` | AWS CloudWatch, Azure Monitor / Container Insights, and any agent that indexes arbitrary stdout JSON (Fluent Bit, Vector, Logstash, ...) | Emits a flat, provider-neutral object: `message`, `level`, `timestamp`, plus optional `labels`/`payload`. |
 | `DatadogJsonLogWriter` | Datadog Log Management | Emits `status` (Datadog's reserved severity attribute - *not* `level`), `@timestamp`, `error.message`/`error.kind`/`error.stack` on exceptions. |
 | `AxiomLogWriter` | Axiom / generic JSON collectors (e.g. Better Stack) | Emits `_time`, `level`, and a merged `data` object combining `payload` and `labels`. |
@@ -203,6 +287,8 @@ class MyLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     // ship `message`/`payload`/`labels`/`exception` wherever you like.
   }
@@ -245,6 +331,45 @@ another, so a slow one doesn't hold up the rest, and a failure in one is
 isolated from the others. (Each writer must still not throw of its own
 accord - see above.)
 
+### Flushing async writers on shutdown
+
+The built-in writers all call `print(...)` synchronously, so nothing is ever
+in flight - there's nothing to flush. But if you write an *asynchronous*
+writer (a network push, a buffered HTTP client), `write` is dispatched
+fire-and-forget, so logs still in flight could be lost if the process exits
+abruptly during shutdown.
+
+To give such a writer a drain point, implement `FlushableLogWriter` instead of
+`LogWriter`, track your own in-flight futures, and await them in `flush()`:
+
+```dart
+class MyNetworkLogWriter implements FlushableLogWriter {
+  final _inFlight = <Future<void>>{};
+
+  @override
+  Future<void> write(String message, {/* ... */}) async {
+    final future = _push(message /* ... */);
+    _inFlight.add(future);
+    await future.whenComplete(() => _inFlight.remove(future));
+  }
+
+  @override
+  Future<void> flush() => Future.wait(_inFlight);
+}
+```
+
+Then drain it from your server's shutdown path, before `pod.shutdown()`:
+
+```dart
+await ServerpodLoggerPlus.flush();
+```
+
+`ServerpodLoggerPlus.flush()` is always safe to call: it's a no-op when no
+writer is configured or when the configured writer isn't a
+`FlushableLogWriter`, so it never fails a teardown. A `MultiLogWriter` is
+flushable too - it fans `flush()` out to whichever of its children implement
+`FlushableLogWriter` and skips the rest.
+
 ## Testing
 
 `serverpod_logger_plus` itself is covered by writer-schema unit tests (see
@@ -277,6 +402,8 @@ class RecordingLogWriter implements LogWriter {
     Map<String, String>? labels,
     Object? exception,
     StackTrace? stackTrace,
+    String? traceId,
+    String? spanId,
   }) async {
     calls.add(message);
   }
