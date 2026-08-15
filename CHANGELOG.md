@@ -1,3 +1,8 @@
+## 0.3.3
+
+- Fix the broken CI badge in `README.md` on pub.dev (point it at the renamed
+  `test.yml` workflow).
+
 ## 0.3.2
 
 - Align repository URLs in `pubspec.yaml`, `README.md`, and `CONTRIBUTING.md`
