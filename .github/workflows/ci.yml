@@ -1,4 +1,4 @@
-name: CI
+name: Test, release & publish to pub.dev
 
 on:
   push:
@@ -10,6 +10,10 @@ on:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+# Baseline read-only permissions; individual jobs elevate only what they need.
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -44,3 +48,57 @@ jobs:
       - name: Validate package
         run: dart pub publish --dry-run
         continue-on-error: true
+
+  # Releases are triggered by bumping `version:` in pubspec.yaml (and adding a
+  # CHANGELOG.md entry) in an ordinary PR. Once that PR merges to main, this
+  # job notices the version has no matching git tag yet and kicks off a
+  # release + pub.dev publish - no bot, no Conventional Commits, no separate
+  # PAT (a tag pushed by the default GITHUB_TOKEN doesn't trigger other
+  # workflows, so release and publish run as jobs in this same workflow
+  # instead of a second, tag-triggered one).
+  check-version:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      should_release: ${{ steps.check-tag.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: get-version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | sed -E 's/^version:\s*//')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - id: check-tag
+        run: |
+          if git rev-parse "v${{ steps.get-version.outputs.version }}" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+
+  publish:
+    needs: release
+    permissions:
+      id-token: write # required for OIDC authentication to pub.dev
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+

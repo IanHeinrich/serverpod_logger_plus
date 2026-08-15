@@ -6,13 +6,13 @@
 
 ## Checklist
 
-- [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, ...)
 - [ ] `dart format .` produces no changes
 - [ ] `dart analyze --fatal-infos` reports no issues
 - [ ] `dart test` passes
 - [ ] Public API changes have dartdoc comments and README updates where relevant
 
 <!--
-No need to bump the version or edit CHANGELOG.md - release-please handles that
-from your Conventional Commit messages.
+Don't bump `version:` in pubspec.yaml unless this PR is meant to trigger a
+release - see CONTRIBUTING.md. Merging a version bump on main auto-tags,
+creates a GitHub release, and publishes to pub.dev.
 -->
