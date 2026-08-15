@@ -10,7 +10,7 @@ import '../log_writer.dart';
 ///
 /// CloudWatch treats any JSON object printed on a single line as a
 /// structured log event and indexes its top-level keys as filterable
-/// fields - no client library or network call is required.
+/// fields - just print JSON, nothing else to set up.
 class CloudWatchJsonLogWriter implements LogWriter {
   const CloudWatchJsonLogWriter();
 

@@ -172,10 +172,10 @@ class LoggerPlus {
 
   /// Sends an entry to the [LogWriter] without blocking the caller.
   ///
-  /// A slow or network-bound writer must never add latency to the request
-  /// that triggered the log call, so the write is fire-and-forget. Errors are
-  /// caught here (rather than awaited) so a throwing writer can neither take
-  /// down the request nor surface as an unhandled async error.
+  /// A slow or network-bound writer shouldn't add latency to the request
+  /// that triggered the log call, so this is fire-and-forget. Errors are
+  /// caught here instead of awaited, so a writer that throws can't crash the
+  /// request or blow up as an unhandled async error.
   void _dispatchToWriter(
     String message, {
     required DateTime timestamp,

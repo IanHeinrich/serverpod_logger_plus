@@ -1,8 +1,7 @@
 # Contributing to serverpod_logger_plus
 
-Thanks for your interest in improving `serverpod_logger_plus`! This document
-covers setting up the project, the checks your change needs to pass, and how
-releases work.
+Thanks for helping out. This covers getting the project running locally,
+what a change needs to pass before it merges, and how releases work.
 
 ## Prerequisites
 

@@ -1,5 +1,9 @@
 # serverpod_logger_plus
 
+[![pub package](https://img.shields.io/pub/v/serverpod_logger_plus.svg)](https://pub.dev/packages/serverpod_logger_plus)
+[![CI](https://github.com/ianheinrich/serverpod_logger_plus/actions/workflows/ci.yml/badge.svg)](https://github.com/ianheinrich/serverpod_logger_plus/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Plug-and-play structured logging for [Serverpod](https://serverpod.dev).
 
 Every log call is dual-routed (the **"Y-Splitter"**):
@@ -12,8 +16,8 @@ Every log call is dual-routed (the **"Y-Splitter"**):
   `stdout` for your log aggregator - or as colorized output for local
   development.
 
-You keep Insights. You gain structured logs your cloud provider can actually
-query, filter, and alert on.
+You still get Insights, plus structured logs your cloud provider can
+actually query, filter, and alert on.
 
 ## Install
 
@@ -79,7 +83,7 @@ dropped-from-stdout entries can still reach the database/Insights.
 
 ### Avoiding double logging in production
 
-Independently of this package, Serverpod's own `Session.log` can *also*
+Separately from this package, Serverpod's own `Session.log` can *also*
 write a JSON or text line straight to stdout, controlled by
 `sessionLogs.consoleEnabled` in your server config
 (`config/<env>.yaml`). Its default value is
