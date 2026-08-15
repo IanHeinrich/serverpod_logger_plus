@@ -12,7 +12,7 @@ doesn't speak the reserved fields GCP, Datadog, or Elastic actually look
 for, so you lose severity facets, error grouping, and label-based filtering
 on arrival.
 
-Every log call is dual-routed (the **"Y-Splitter"**):
+Every log call is dual-routed (**"Y-Splitter"**):
 
 - A flattened, human-readable string is sent to `Session.log`, so it's still
   persisted to the Serverpod database and shows up in **Serverpod Insights**,
