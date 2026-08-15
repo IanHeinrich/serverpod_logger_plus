@@ -38,6 +38,7 @@ export 'src/writers/datadog_json_log_writer.dart';
 export 'src/writers/elastic_ecs_log_writer.dart';
 export 'src/writers/gcp_json_log_writer.dart';
 export 'src/writers/generic_json_log_writer.dart';
+export 'src/writers/multi_log_writer.dart';
 export 'src/writers/newrelic_json_log_writer.dart';
 export 'src/writers/otel_json_log_writer.dart';
 export 'src/writers/splunk_json_log_writer.dart';

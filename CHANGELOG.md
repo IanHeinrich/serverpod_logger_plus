@@ -1,3 +1,10 @@
+## 0.3.0
+
+- New `MultiLogWriter` that fans a single log call out to several writers, so
+  you can keep a built-in structured-JSON writer *and* run extra work on top
+  (e.g. an async network push) instead of having to replace the output
+  entirely.
+
 ## 0.2.0
 
 - New writers: `ElasticEcsLogWriter` (Elastic Common Schema),
