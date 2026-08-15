@@ -14,6 +14,7 @@ import '../log_writer.dart';
 ///
 /// See: https://cloud.google.com/logging/docs/structured-logging
 class GcpJsonLogWriter implements LogWriter {
+  /// Creates a [GcpJsonLogWriter].
   const GcpJsonLogWriter();
 
   @override

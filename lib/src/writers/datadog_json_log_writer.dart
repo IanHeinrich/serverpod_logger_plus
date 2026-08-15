@@ -16,6 +16,7 @@ import '../log_writer.dart';
 ///
 /// See: https://docs.datadoghq.com/logs/log_configuration/attributes_naming_convention/
 class DatadogJsonLogWriter implements LogWriter {
+  /// Creates a [DatadogJsonLogWriter].
   const DatadogJsonLogWriter();
 
   @override

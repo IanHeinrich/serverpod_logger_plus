@@ -19,6 +19,7 @@ import '../log_writer.dart';
 ///
 /// See: https://docs.splunk.com/Documentation/Splunk/latest/Data/FormateventsforHTTPEventCollector
 class SplunkJsonLogWriter implements LogWriter {
+  /// Creates a [SplunkJsonLogWriter].
   const SplunkJsonLogWriter();
 
   @override

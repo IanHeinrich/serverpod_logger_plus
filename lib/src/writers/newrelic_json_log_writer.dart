@@ -16,6 +16,7 @@ import '../log_writer.dart';
 ///
 /// See: https://docs.newrelic.com/docs/logs/log-api/introduction-log-api/
 class NewRelicJsonLogWriter implements LogWriter {
+  /// Creates a [NewRelicJsonLogWriter].
   const NewRelicJsonLogWriter();
 
   @override

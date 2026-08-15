@@ -1,3 +1,10 @@
+## 0.3.1
+
+- Add an `example/` demonstrating every built-in writer plus the
+  `session.logger` server wiring.
+- Document all writer constructors.
+- Shorten the pubspec `description` to pub.dev's recommended length.
+
 ## 0.3.0
 
 - New `MultiLogWriter` that fans a single log call out to several writers, so

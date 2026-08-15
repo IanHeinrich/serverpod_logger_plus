@@ -1,11 +1,9 @@
 name: serverpod_logger_plus
 description: >-
-  Plug-and-play structured logging for Serverpod. Routes flattened log
-  messages to Serverpod's session log (Insights) while emitting fully
-  structured JSON to stdout for GCP, Datadog, Axiom, Elastic, New Relic,
-  Splunk, and OpenTelemetry, or any generic JSON collector (AWS CloudWatch,
-  Azure Monitor), or a beautiful ANSI console for local development.
-version: 0.3.0
+  Plug-and-play structured logging for Serverpod: dual-routes each log to
+  Serverpod Insights and structured JSON on stdout for GCP, Datadog, Elastic,
+  and more.
+version: 0.3.1
 homepage: https://github.com/ianheinrich/serverpod_logger_plus
 repository: https://github.com/ianheinrich/serverpod_logger_plus
 issue_tracker: https://github.com/ianheinrich/serverpod_logger_plus/issues
