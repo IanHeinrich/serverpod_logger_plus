@@ -11,7 +11,7 @@ what a change needs to pass before it merges, and how releases work.
 ## Getting started
 
 ```bash
-git clone https://github.com/ianheinrich/serverpod_logger_plus.git
+git clone https://github.com/IanHeinrich/serverpod_logger_plus.git
 cd serverpod_logger_plus
 dart pub get
 ```
