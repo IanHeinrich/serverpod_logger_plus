@@ -6,48 +6,56 @@
 
 Plug-and-play structured logging for [Serverpod](https://serverpod.dev).
 
-Serverpod can already print JSON to stdout
-(`sessionLogs.consoleLogFormat: json`), but it's one generic schema - it
-doesn't speak the reserved fields GCP, Datadog, or Elastic actually look
-for, so you lose severity facets, error grouping, and label-based filtering
-on arrival.
+Serverpod can already print JSON to stdout (`sessionLogs.consoleLogFormat: json`), but it's one generic schema - it doesn't speak the reserved fields GCP, Datadog, or Elastic actually look for, so you lose severity facets, error grouping, and label-based filtering on arrival.
 
 Every log call is dual-routed (**"Y-Splitter"**):
 
-- A flattened, human-readable string is sent to `Session.log`, so it's still
-  persisted to the Serverpod database and shows up in **Serverpod Insights**,
-  exactly like `session.log(...)` today.
-- The fully structured data (message, labels, payload, exception, stack
-  trace) is sent to a pluggable `LogWriter`, which prints it as JSON on
-  `stdout` for your log aggregator - or as colorized output for local
-  development.
+- A flattened, human-readable string is sent to `Session.log`, so it's still persisted to the Serverpod database and shows up in **Serverpod Insights**, exactly like `session.log(...)` today.
+- The fully structured data (message, labels, payload, exception, stack trace) is sent to a pluggable `LogWriter`, which prints it as JSON on `stdout` for your log aggregator - or as colorized output for local development.
 
-You still get Insights, plus structured logs your cloud provider can
-actually query, filter, and alert on.
+You still get Insights, plus structured logs your cloud provider can actually query, filter, and alert on.
 
 ## Install
 
 ```yaml
 dependencies:
   serverpod_logger_plus: ^0.1.0
+
 ```
 
-## Quickstart
+## Quickstart & Configuration
+
+Configure the logger once at startup before any request accesses `session.logger`. You can configure your production writer, suppress noise, enable automatic request logging, and bind distributed tracing context all in one place:
 
 ```dart
 import 'package:serverpod/serverpod.dart';
 import 'package:serverpod_logger_plus/serverpod_logger_plus.dart';
 
 void run(List<String> args) async {
-  // Pick the writer for your production log sink. Required once, at
-  // startup, before any request accesses `session.logger`.
   ServerpodLoggerPlus.configure(
-    productionWriter: const GcpJsonLogWriter(),
+    // Required: The writer used in non-development modes (staging, production, etc.)
+    productionWriter: const GcpJsonLogWriter(projectId: 'my-gcp-project'),
+
+    // Optional: Drop log calls below this threshold from the stdout writer
+    minimumLevel: LogLevel.info, 
+
+    // Optional: Emit a structured "Request completed" record on session close
+    logRequests: true, 
+
+    // Optional: Read incoming request headers (W3C, GCP, AWS, Datadog) to bind traceId/spanId
+    bindTraceContext: true, 
+
+    // Optional: Replace built-in trace parsing to support proprietary headers
+    traceContextExtractor: (session) {
+      final id = session.request?.headers['x-corp-trace-id']?.first;
+      return id == null ? const {} : {'traceId': id};
+    },
   );
 
   final pod = Serverpod(args, Protocol(), Endpoints());
   await pod.start();
 }
+
 ```
 
 Then, anywhere you have a `Session`:
@@ -59,133 +67,28 @@ class GreetingEndpoint extends Endpoint {
     return 'Hello, $name!';
   }
 }
+
 ```
 
-No manual wiring per-endpoint: `session.logger` is a zero-boilerplate
-extension getter, lazily created and memoized per `Session`. It automatically
-picks the right writer:
+No manual wiring per-endpoint: `session.logger` is a zero-boilerplate extension getter, lazily created and memoized per `Session`. It automatically defaults to a local ANSI `ConsoleLogWriter` in development, and uses your configured `productionWriter` in all other run modes.
 
-- `runMode == development` → a local ANSI `ConsoleLogWriter`, regardless of
-  what you passed to `configure`.
-- Any other run mode (`staging`, `production`, `test`, ...) → the
-  `productionWriter` registered via `ServerpodLoggerPlus.configure`.
+### Configuration Options
 
-### Suppressing low-severity noise
+| Option | Description |
+| --- | --- |
+| **`productionWriter`** | Your primary log sink. Emits fully structured JSON on stdout to your cloud provider. |
+| **`minimumLevel`** | Suppresses low-severity noise (and ingestion cost) from your log aggregator. *Serverpod's own database session log is unaffected.* |
+| **`logRequests`** | Triggers a structured log containing the endpoint, method, and duration when the session closes. *(Note: `session.logger` must be accessed during the request to fire. This does not capture HTTP errors; continue using `session.logger.error` in catch blocks).* |
+| **`bindTraceContext`** | Enables automatic log-to-trace linking. Each built-in writer maps the extracted IDs to its provider's reserved trace fields. |
+| **`traceContextExtractor`** | An override callback for bespoke trace headers. You can return `extractTraceContext(session)` from inside it as a fallback. |
 
-By default every level is written. Pass `minimumLevel` to drop calls below a
-threshold from the writer's output - useful for keeping `debug` chatter (and
-its ingestion cost) out of production log sinks:
-
-```dart
-ServerpodLoggerPlus.configure(
-  productionWriter: const GcpJsonLogWriter(),
-  minimumLevel: LogLevel.info, // debug is dropped by the writer
-);
-```
-
-This gates only this package's writer. Serverpod's own session log is
-unaffected and continues to be filtered by Serverpod's log settings, so
-dropped-from-stdout entries can still reach the database/Insights.
-
-### Automatic request logging
-
-Serverpod already writes one session-log row per completed call to its
-database (duration, query timings, uncaught exceptions), surfaced in
-Insights - but that record never goes through your `LogWriter`, so it doesn't
-reach your structured stdout sink. Set `logRequests: true` to bridge the gap:
-every session that touches `session.logger` emits one structured
-`Request completed` record (endpoint, method, duration) to your writer when it
-closes.
-
-```dart
-ServerpodLoggerPlus.configure(
-  productionWriter: const GcpJsonLogWriter(),
-  logRequests: true,
-);
-```
-
-You can also opt in for a single request explicitly, without the global flag,
-by calling `session.logger.logRequestOnClose()` in a handler - it's idempotent
-per session.
-
-Two caveats worth knowing:
-
-- The completion record is emitted only if `session.logger` is accessed during
-  the request (that's the hook point - Serverpod's HTTP middleware runs before
-  a `Session` exists, so it isn't the right layer for session-scoped logs).
-- Serverpod's session-close hook isn't given the call's error, so this record
-  can't say whether the call *failed*. Keep using
-  `session.logger.error(...)`/`fatal(...)` in your catch blocks for failures.
-
-### Binding distributed trace context
-
-Serverpod has its own per-session id but doesn't propagate standard
-distributed-trace headers onto your logs. Set `bindTraceContext: true` and
-`session.logger` reads the incoming request's trace headers and binds
-`traceId`/`spanId` as labels on every log call for that session, so your
-aggregator can pivot from a log line to the full trace.
-
-```dart
-ServerpodLoggerPlus.configure(
-  productionWriter: const GcpJsonLogWriter(projectId: 'my-gcp-project'),
-  bindTraceContext: true,
-);
-```
-
-The first recognized header wins, in this order: W3C `traceparent`, GCP
-`X-Cloud-Trace-Context`, AWS `X-Amzn-Trace-Id`, then Datadog
-`x-datadog-trace-id`/`x-datadog-parent-id`. Sessions without a request
-(internal or future-call sessions) are simply left untagged. You can also call
-`extractTraceContext(session)` yourself if you want the ids without the global
-flag.
-
-For a proprietary trace header (or any non-standard encoding), pass your own
-`traceContextExtractor` to replace the built-in parsing:
-
-```dart
-ServerpodLoggerPlus.configure(
-  productionWriter: const GcpJsonLogWriter(projectId: 'my-gcp-project'),
-  bindTraceContext: true,
-  traceContextExtractor: (session) {
-    final id = session.request?.headers['x-corp-trace-id']?.first;
-    return id == null ? const {} : {'traceId': id};
-  },
-);
-```
-
-Return `extractTraceContext(session)` from inside your extractor if you want to
-keep the standard-header parsing as a fallback.
-
-Each built-in writer maps the bound `traceId`/`spanId` into its provider's
-reserved trace field - OTel's native `LogRecord` `traceId`/`spanId`, ECS and
-New Relic `trace.id`/`span.id`, Datadog `dd.trace_id`/`dd.span_id`, GCP
-`logging.googleapis.com/trace` - so your backend links the log line to its
-trace automatically. Two provider notes:
-
-- `GcpJsonLogWriter` needs your project id to build the reserved trace field:
-  `GcpJsonLogWriter(projectId: '...')`. Without it, the trace id is emitted as
-  a label instead (searchable, but without automatic log-to-trace linking).
-- Datadog expects 64-bit decimal ids; the id is passed through as received, so
-  it links when the incoming trace header is Datadog's own.
+> **Provider Trace Notes:** `GcpJsonLogWriter` requires your `projectId` to build the reserved trace field; otherwise, it emits the ID as a standard label. Datadog expects 64-bit decimal IDs and will link successfully if the incoming trace header uses Datadog's format.
 
 ### Avoiding double logging in production
 
-Separately from this package, Serverpod's own `Session.log` can *also*
-write a JSON or text line straight to stdout, controlled by
-`sessionLogs.consoleEnabled` in your server config
-(`config/<env>.yaml`). Its default value is
-`!databaseEnabled || runMode == development` - i.e. **off** by default in
-`staging`/`production` as long as a database is configured, but **on** by
-default for database-less setups (like Serverpod Mini), or if you've
-explicitly set `sessionLogs: { consoleEnabled: true }` for that environment.
+Separately from this package, Serverpod's own `Session.log` can *also* write a JSON or text line straight to stdout, controlled by `sessionLogs.consoleEnabled` in your server config (`config/<env>.yaml`). Its default value is `!databaseEnabled || runMode == development` - i.e. **off** by default in `staging`/`production` as long as a database is configured, but **on** by default for database-less setups.
 
-If it's on in the same run mode where you've configured a `productionWriter`,
-every log call is printed to stdout twice - once by Serverpod's own writer,
-once by yours. `session.logger` detects this and prints a one-time warning
-to stderr when it happens. To avoid the duplication, set
-`sessionLogs: { consoleEnabled: false }` in that environment's config (or
-the `SERVERPOD_SESSION_CONSOLE_LOG_ENABLED` env var), unless you actually
-want both.
+If it's on in the same run mode where you've configured a `productionWriter`, every log call is printed to stdout twice - once by Serverpod's own writer, once by yours. `session.logger` detects this and prints a one-time warning to stderr when it happens. To avoid the duplication, set `sessionLogs: { consoleEnabled: false }` in that environment's config (or the `SERVERPOD_SESSION_CONSOLE_LOG_ENABLED` env var), unless you actually want both.
 
 ## API
 
@@ -199,43 +102,31 @@ session.logger.info('message', payload: {...}, labels: {...});
 session.logger.warning('message', payload: {...}, labels: {...});
 session.logger.error('message', exception: e, stackTrace: st, payload: {...});
 session.logger.fatal('message', exception: e, stackTrace: st, payload: {...});
+
 ```
 
-- `payload` - arbitrary structured data relevant to this one log call (e.g.
-  `{'userId': id}`).
-- `labels` - key/value tags meant to be consistent across many log calls
-  (e.g. `{'requestId': id}`), suitable for indexing/filtering in your log
-  backend.
+* `payload` - arbitrary structured data relevant to this one log call (e.g. `{'userId': id}`).
+* `labels` - key/value tags meant to be consistent across many log calls (e.g. `{'requestId': id}`), suitable for indexing/filtering in your log backend.
 
 ### Binding context
 
-Use `session.bindLogger(...)` to attach labels/payload that should be included
-on every subsequent `session.logger` call, so you don't have to repeat them -
-or thread a logger object through your call stack. It enriches `session.logger`
-in place for the rest of the request:
+Use `session.bindLogger(...)` to attach labels/payload that should be included on every subsequent `session.logger` call, so you don't have to repeat them - or thread a logger object through your call stack. It enriches `session.logger` in place for the rest of the request:
 
 ```dart
 session.bindLogger(labels: {'requestId': requestId});
 
 await session.logger.info('Starting request'); // tagged with requestId
 await session.logger.info('Finished request'); // still tagged, anywhere
+
 ```
 
-Every later `session.logger` on that `Session` carries the bound context.
-`bindLogger` also returns the enriched logger if you want a direct reference,
-but you don't need to keep it - the point is the side effect on
-`session.logger`.
+Every later `session.logger` on that `Session` carries the bound context. `bindLogger` also returns the enriched logger if you want a direct reference, but you don't need to keep it - the point is the side effect on `session.logger`.
 
-> Note: the class is named `LoggerPlus`, not `Logger` - `package:serverpod`
-> already exports its own `Logger` (from `relic_core`, used internally for
-> HTTP request logging), so naming ours `Logger` would collide with it in
-> every file that imports both packages.
+> Note: the class is named `LoggerPlus`, not `Logger` - `package:serverpod` already exports its own `Logger` (from `relic_core`, used internally for HTTP request logging), so naming ours `Logger` would collide with it in every file that imports both packages.
 
 ## Writers
 
-Pick one `LogWriter` as your `productionWriter`. Each one emits a single
-line of JSON per log call, shaped for its target platform's structured
-logging / reserved-attribute conventions:
+Pick one `LogWriter` as your `productionWriter`. Each one emits a single line of JSON per log call, shaped for its target platform's structured logging / reserved-attribute conventions:
 
 | Writer | Target | Notes |
 | --- | --- | --- |
@@ -249,30 +140,18 @@ logging / reserved-attribute conventions:
 | `OtelJsonLogWriter` | OpenTelemetry Collector (OTLP/JSON) | Emits an OTel `LogRecord` (`timeUnixNano`, `severityNumber`/`severityText`, `body`, `attributes`). Intended to be collected by an OpenTelemetry Collector pipeline (see note below). |
 | `ConsoleLogWriter` | Local development | ANSI-colored, human-readable console output. Automatically used whenever `runMode == development`. |
 
-All writers only ever call `print(...)` (never `stdout.writeln`), so they
-play nicely with Zone-based print interception in tests.
+All writers only ever call `print(...)` (never `stdout.writeln`), so they play nicely with Zone-based print interception in tests.
 
-> **Note on `OtelJsonLogWriter`:** a bare OTLP/JSON `LogRecord` on stdout is
-> not a turn-key ingestion path on its own - it's meant to be collected by an
-> OpenTelemetry Collector whose pipeline maps these fields (e.g. a `filelog`
-> receiver with a JSON parser). If you just need a schema a specific vendor
-> ingests directly, prefer that vendor's writer.
+> **Note on `OtelJsonLogWriter`:** a bare OTLP/JSON `LogRecord` on stdout is not a turn-key ingestion path on its own - it's meant to be collected by an OpenTelemetry Collector whose pipeline maps these fields (e.g. a `filelog` receiver with a JSON parser). If you just need a schema a specific vendor ingests directly, prefer that vendor's writer.
 
 ### Implementing your own writer
 
-A `LogWriter` is the single unit that decides what a log call turns into.
-Whichever writer you pass to `configure` as the `productionWriter` is the
-*entire* production output - there is no default JSON writer running
-underneath it that you're adding to or filtering. Implement your own when
-you need something the built-in writers don't:
+A `LogWriter` is the single unit that decides what a log call turns into. Whichever writer you pass to `configure` as the `productionWriter` is the *entire* production output - there is no default JSON writer running underneath it that you're adding to or filtering. Implement your own when you need something the built-in writers don't:
 
-- a **different schema on stdout** (a collector that isn't listed above), or
-- to **ship logs over the network** (an HTTP call to a provider with no
-  stdout-based ingestion).
+* a **different schema on stdout** (a collector that isn't listed above), or
+* to **ship logs over the network** (an HTTP call to a provider with no stdout-based ingestion).
 
-`write` is dispatched without being awaited by the caller, so slower work
-like a network call won't add latency to the request - just make sure it
-never throws:
+`write` is dispatched without being awaited by the caller, so slower work like a network call won't add latency to the request - just make sure it never throws:
 
 ```dart
 class MyLogWriter implements LogWriter {
@@ -290,30 +169,26 @@ class MyLogWriter implements LogWriter {
     String? traceId,
     String? spanId,
   }) async {
-    // ship `message`/`payload`/`labels`/`exception` wherever you like.
+    // ship `message`/`payload`/`labels`/`exception`/`traceId` wherever you like.
   }
 }
+
 ```
 
-Then pass an instance to `configure` as `productionWriter`, exactly like
-the built-in writers in the Quickstart above:
+Then pass an instance to `configure` as `productionWriter`, exactly like the built-in writers in the Quickstart above:
 
 ```dart
 ServerpodLoggerPlus.configure(
   productionWriter: const MyLogWriter(),
 );
+
 ```
 
-That's the only wiring required - `session.logger` picks it up
-automatically for every non-development run mode.
+That's the only wiring required - `session.logger` picks it up automatically for every non-development run mode.
 
 ### Combining writers (keep the default JSON *and* add your own)
 
-You don't have to choose between a built-in writer and your own logic. To
-keep a built-in structured-JSON writer *and* run extra work on top - say an
-async network push, a metrics counter, or a side-channel alert - wrap them
-in a `MultiLogWriter`. It fans every log call out to each writer you give
-it:
+You don't have to choose between a built-in writer and your own logic. To keep a built-in structured-JSON writer *and* run extra work on top - say an async network push, a metrics counter, or a side-channel alert - wrap them in a `MultiLogWriter`. It fans every log call out to each writer you give it:
 
 ```dart
 ServerpodLoggerPlus.configure(
@@ -322,25 +197,16 @@ ServerpodLoggerPlus.configure(
     PagerDutyLogWriter(), // + your own writer, e.g. an async HTTP call
   ]),
 );
+
 ```
 
-Your extra writer only needs to do *its* part (the network call) - it
-doesn't have to re-emit the JSON, because `GcpJsonLogWriter` is still in the
-list doing that. Writers are dispatched together rather than one after
-another, so a slow one doesn't hold up the rest, and a failure in one is
-isolated from the others. (Each writer must still not throw of its own
-accord - see above.)
+Your extra writer only needs to do *its* part (the network call) - it doesn't have to re-emit the JSON, because `GcpJsonLogWriter` is still in the list doing that. Writers are dispatched together rather than one after another, so a slow one doesn't hold up the rest, and a failure in one is isolated from the others. (Each writer must still not throw of its own accord - see above.)
 
 ### Flushing async writers on shutdown
 
-The built-in writers all call `print(...)` synchronously, so nothing is ever
-in flight - there's nothing to flush. But if you write an *asynchronous*
-writer (a network push, a buffered HTTP client), `write` is dispatched
-fire-and-forget, so logs still in flight could be lost if the process exits
-abruptly during shutdown.
+The built-in writers all call `print(...)` synchronously, so nothing is ever in flight - there's nothing to flush. But if you write an *asynchronous* writer (a network push, a buffered HTTP client), `write` is dispatched fire-and-forget, so logs still in flight could be lost if the process exits abruptly during shutdown.
 
-To give such a writer a drain point, implement `FlushableLogWriter` instead of
-`LogWriter`, track your own in-flight futures, and await them in `flush()`:
+To give such a writer a drain point, implement `FlushableLogWriter` instead of `LogWriter`, track your own in-flight futures, and await them in `flush()`:
 
 ```dart
 class MyNetworkLogWriter implements FlushableLogWriter {
@@ -356,32 +222,23 @@ class MyNetworkLogWriter implements FlushableLogWriter {
   @override
   Future<void> flush() => Future.wait(_inFlight);
 }
+
 ```
 
 Then drain it from your server's shutdown path, before `pod.shutdown()`:
 
 ```dart
 await ServerpodLoggerPlus.flush();
+
 ```
 
-`ServerpodLoggerPlus.flush()` is always safe to call: it's a no-op when no
-writer is configured or when the configured writer isn't a
-`FlushableLogWriter`, so it never fails a teardown. A `MultiLogWriter` is
-flushable too - it fans `flush()` out to whichever of its children implement
-`FlushableLogWriter` and skips the rest.
+`ServerpodLoggerPlus.flush()` is always safe to call: it's a no-op when no writer is configured or when the configured writer isn't a `FlushableLogWriter`, so it never fails a teardown. A `MultiLogWriter` is flushable too - it fans `flush()` out to whichever of its children implement `FlushableLogWriter` and skips the rest.
 
 ## Testing
 
-`serverpod_logger_plus` itself is covered by writer-schema unit tests (see
-`test/`) run with plain `package:test`, using a `Zone`-based `print`
-interceptor (`test/util/capture_print.dart`) to assert on each writer's JSON
-output without touching real stdout.
+`serverpod_logger_plus` itself is covered by writer-schema unit tests (see `test/`) run with plain `package:test`, using a `Zone`-based `print` interceptor (`test/util/capture_print.dart`) to assert on each writer's JSON output without touching real stdout.
 
-To verify the Y-Splitter behavior end-to-end *inside your own Serverpod
-server*, write an integration test with
-[`serverpod_test`](https://pub.dev/packages/serverpod_test)'s
-`withServerpod`, and assert both routes are exercised - `session.log`
-doesn't throw, and your writer received the structured data:
+To verify the Y-Splitter behavior end-to-end *inside your own Serverpod server*, write an integration test with [`serverpod_test`](https://pub.dev/packages/serverpod_test)'s `withServerpod`, and assert both routes are exercised - `session.log` doesn't throw, and your writer received the structured data:
 
 ```dart
 import 'package:serverpod_logger_plus/serverpod_logger_plus.dart';
@@ -423,12 +280,10 @@ void main() {
     });
   });
 }
+
 ```
 
-This test needs to live inside a real generated Serverpod project (it
-imports that project's generated `protocol.dart`/`endpoints.dart`), so it
-isn't bundled in this package - copy the pattern above into your server's
-`test/integration/` directory.
+This test needs to live inside a real generated Serverpod project (it imports that project's generated `protocol.dart`/`endpoints.dart`), so it isn't bundled in this package - copy the pattern above into your server's `test/integration/` directory.
 
 ## License
 
