@@ -12,6 +12,7 @@ import '../log_writer.dart';
 /// `payload` and `labels` are combined into a single `data` object, since
 /// Axiom does not distinguish between metadata and payload attributes.
 class AxiomLogWriter implements LogWriter {
+  /// Creates an [AxiomLogWriter].
   const AxiomLogWriter();
 
   @override

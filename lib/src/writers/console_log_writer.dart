@@ -16,6 +16,10 @@ class ConsoleLogWriter implements LogWriter {
   /// below the log line. Set to false for a more compact single-line output.
   final bool verbose;
 
+  /// Creates a [ConsoleLogWriter].
+  ///
+  /// Set [verbose] to false for compact single-line output without the
+  /// pretty-printed labels/payload dump.
   const ConsoleLogWriter({this.verbose = true});
 
   static const _jsonEncoder = JsonEncoder.withIndent('  ');

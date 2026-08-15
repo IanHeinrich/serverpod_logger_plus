@@ -17,6 +17,7 @@ import '../log_writer.dart';
 ///
 /// See: https://www.elastic.co/guide/en/ecs/current/index.html
 class ElasticEcsLogWriter implements LogWriter {
+  /// Creates an [ElasticEcsLogWriter].
   const ElasticEcsLogWriter();
 
   @override

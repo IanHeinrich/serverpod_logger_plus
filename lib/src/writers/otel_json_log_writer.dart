@@ -22,6 +22,7 @@ import '../log_writer.dart';
 ///
 /// See: https://opentelemetry.io/docs/specs/otel/logs/data-model/
 class OtelJsonLogWriter implements LogWriter {
+  /// Creates an [OtelJsonLogWriter].
   const OtelJsonLogWriter();
 
   @override

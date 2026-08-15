@@ -24,6 +24,7 @@ import '../log_writer.dart';
 /// Relic, Splunk, OpenTelemetry), prefer that provider's dedicated writer so
 /// severity facets, error grouping, and label filtering work out of the box.
 class GenericJsonLogWriter implements LogWriter {
+  /// Creates a [GenericJsonLogWriter].
   const GenericJsonLogWriter();
 
   @override

@@ -26,6 +26,7 @@ class MultiLogWriter implements LogWriter {
   /// The writers to dispatch every log call to, in the given order.
   final List<LogWriter> writers;
 
+  /// Creates a [MultiLogWriter] that dispatches every log call to [writers].
   const MultiLogWriter(this.writers);
 
   @override
