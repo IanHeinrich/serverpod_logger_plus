@@ -1,0 +1,12 @@
+# Dart / Pub
+.dart_tool/
+.packages
+build/
+doc/api/
+
+# A library should not commit its lockfile; only applications pin dependencies.
+pubspec.lock
+
+# IDE / editor
+.idea/
+*.iml
