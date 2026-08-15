@@ -6,6 +6,8 @@
 
 Plug-and-play structured logging for [Serverpod](https://serverpod.dev).
 
+Serverpod can already print JSON to stdout (`sessionLogs.consoleLogFormat: json`), but it's one generic schema - it doesn't speak the reserved fields GCP, CloudWatch, or Datadog actually look for, so you lose severity facets, error grouping, and label-based filtering on arrival.
+
 Every log call is dual-routed (the **"Y-Splitter"**):
 
 - A flattened, human-readable string is sent to `Session.log`, so it's still
