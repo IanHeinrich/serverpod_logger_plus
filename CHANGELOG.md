@@ -1,3 +1,14 @@
+## 0.2.0
+
+- New writers: `ElasticEcsLogWriter` (Elastic Common Schema),
+  `NewRelicJsonLogWriter` (New Relic Logs), `SplunkJsonLogWriter` (Splunk),
+  and `OtelJsonLogWriter` (OpenTelemetry Logs / OTLP-JSON).
+- **Breaking:** replaced `CloudWatchJsonLogWriter` with the provider-neutral
+  `GenericJsonLogWriter`, which emits the same flat JSON and now documents the
+  full set of targets it fits (AWS CloudWatch, Azure Monitor / Container
+  Insights, and any agent that indexes arbitrary stdout JSON). Swap
+  `CloudWatchJsonLogWriter()` for `GenericJsonLogWriter()`.
+
 ## 0.1.0
 
 - Initial release.
