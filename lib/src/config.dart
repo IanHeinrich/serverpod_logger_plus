@@ -1,6 +1,8 @@
 import 'package:serverpod/serverpod.dart';
 
+import 'flatten.dart';
 import 'log_writer.dart';
+import 'redaction.dart';
 import 'trace_context.dart';
 
 /// Global configuration for `serverpod_logger_plus`.
@@ -15,6 +17,8 @@ abstract final class ServerpodLoggerPlus {
   static bool _logRequests = false;
   static bool _bindTraceContext = false;
   static TraceContextExtractor? _traceContextExtractor;
+  static int _flattenValueMaxLength = defaultFlattenValueMaxLength;
+  static RedactionPolicy _redactionPolicy = RedactionPolicy.none;
 
   /// Sets the [LogWriter] used whenever `runMode != development`.
   ///
@@ -34,18 +38,42 @@ abstract final class ServerpodLoggerPlus {
   /// `x-datadog-trace-id`) and binds `traceId`/`spanId` as labels on every log
   /// call for that session. Pass [traceContextExtractor] to replace that
   /// built-in parsing with your own (e.g. for a proprietary trace header).
+  ///
+  /// [flattenValueMaxLength] caps each individual label/payload value in the
+  /// string written to Serverpod's session log. It does not affect the
+  /// [LogWriter], which receives the untruncated structured data.
+  ///
+  /// [redactKeys] names label/payload keys whose values must never be logged.
+  /// Matching is **case-insensitive**, applies at any nesting depth, and
+  /// replaces the value with [redactionPlaceholder] (`[redacted]` by default).
+  /// A matched key holding a map or list has the whole subtree replaced.
+  ///
+  /// [redactor] handles rules a key list cannot express. It runs *after*
+  /// [redactKeys] and is never called for a key that already matched. Return
+  /// the value it was given to leave it alone. See [RedactionPolicy] for what
+  /// redaction does and does not cover.
   static void configure({
     required LogWriter productionWriter,
     LogLevel? minimumLevel,
     bool logRequests = false,
     bool bindTraceContext = false,
     TraceContextExtractor? traceContextExtractor,
+    int flattenValueMaxLength = defaultFlattenValueMaxLength,
+    Set<String> redactKeys = const <String>{},
+    Redactor? redactor,
+    String redactionPlaceholder = defaultRedactionPlaceholder,
   }) {
     _productionWriter = productionWriter;
     _minimumLevel = minimumLevel;
     _logRequests = logRequests;
     _bindTraceContext = bindTraceContext;
     _traceContextExtractor = traceContextExtractor;
+    _flattenValueMaxLength = flattenValueMaxLength;
+    _redactionPolicy = RedactionPolicy(
+      keys: redactKeys,
+      redactor: redactor,
+      placeholder: redactionPlaceholder,
+    );
   }
 
   /// The minimum severity a log call must have for its [LogWriter] output to
@@ -64,6 +92,14 @@ abstract final class ServerpodLoggerPlus {
   /// parsing when set. Configured via [configure]'s `traceContextExtractor`.
   static TraceContextExtractor? get traceContextExtractor =>
       _traceContextExtractor;
+
+  /// Per-value cap applied when flattening labels/payload into the string sent
+  /// to Serverpod's session log.
+  static int get flattenValueMaxLength => _flattenValueMaxLength;
+
+  /// The redaction rules applied to labels and payload before either sink
+  /// sees them.
+  static RedactionPolicy get redactionPolicy => _redactionPolicy;
 
   /// The configured production writer.
   ///
@@ -102,5 +138,7 @@ abstract final class ServerpodLoggerPlus {
     _logRequests = false;
     _bindTraceContext = false;
     _traceContextExtractor = null;
+    _flattenValueMaxLength = defaultFlattenValueMaxLength;
+    _redactionPolicy = RedactionPolicy.none;
   }
 }

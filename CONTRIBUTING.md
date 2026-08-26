@@ -36,10 +36,14 @@ All four must pass. CI runs them on every pull request and push to `main`.
   of private helpers.
 - The structured writers are tested by capturing `print` output in a `Zone`
   (see `test/util/capture_print.dart`) and asserting on the decoded JSON.
-- The end-to-end Y-Splitter behavior (routing through a real `Session`) is
-  covered by a `withServerpod` integration test that lives inside a generated
-  Serverpod server, not in this package - see the **Testing** section of the
-  README for the copy-paste pattern.
+- The Y-Splitter's `Session.log` side is covered in this package via
+  `test/util/recording_session.dart`, a `Session` double built on
+  `noSuchMethod`. Use it (with `test/util/recording_log_writer.dart`) to assert
+  on both sinks at once - `test/logger_test.dart` is the example.
+- End-to-end behavior through a *real* `Session` is still covered by a
+  `withServerpod` integration test that lives inside a generated Serverpod
+  server, not in this package - see the **Testing** section of the README for
+  the copy-paste pattern.
 
 ## Coding conventions
 

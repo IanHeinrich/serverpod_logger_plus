@@ -1,0 +1,13 @@
+{
+  "env": {
+    "GIT_AUTHOR_NAME": "Ian Heinrich",
+    "GIT_AUTHOR_EMAIL": "ian@heinrich.org.uk",
+    "GIT_COMMITTER_NAME": "Ian Heinrich",
+    "GIT_COMMITTER_EMAIL": "ian@heinrich.org.uk"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  }
+}

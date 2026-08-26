@@ -81,6 +81,10 @@ No manual wiring per-endpoint: `session.logger` is a zero-boilerplate extension 
 | **`logRequests`** | Triggers a structured log containing the endpoint, method, and duration when the session closes. *(Note: `session.logger` must be accessed during the request to fire. This does not capture HTTP errors; continue using `session.logger.error` in catch blocks).* |
 | **`bindTraceContext`** | Enables automatic log-to-trace linking. Each built-in writer maps the extracted IDs to its provider's reserved trace fields. |
 | **`traceContextExtractor`** | An override callback for bespoke trace headers. You can return `extractTraceContext(session)` from inside it as a fallback. |
+| **`redactKeys`** | Label/payload keys whose values must never be logged. Case-insensitive, applied at any nesting depth, to *both* sinks. |
+| **`redactor`** | A callback for rules a key list can't express (e.g. masking anything shaped like a card number). Runs *after* `redactKeys`, on what survived. |
+| **`redactionPlaceholder`** | What a redacted value is replaced with. Defaults to `[redacted]`. |
+| **`flattenValueMaxLength`** | Caps each label/payload value in the string written to Serverpod's session log. Defaults to 1024. *The `LogWriter` still receives untruncated data.* |
 
 > **Provider Trace Notes:** `GcpJsonLogWriter` requires your `projectId` to build the reserved trace field; otherwise, it emits the ID as a standard label. Datadog expects 64-bit decimal IDs and will link successfully if the incoming trace header uses Datadog's format.
 
@@ -89,6 +93,53 @@ No manual wiring per-endpoint: `session.logger` is a zero-boilerplate extension 
 Separately from this package, Serverpod's own `Session.log` can *also* write a JSON or text line straight to stdout, controlled by `sessionLogs.consoleEnabled` in your server config (`config/<env>.yaml`). Its default value is `!databaseEnabled || runMode == development` - i.e. **off** by default in `staging`/`production` as long as a database is configured, but **on** by default for database-less setups.
 
 If it's on in the same run mode where you've configured a `productionWriter`, every log call is printed to stdout twice - once by Serverpod's own writer, once by yours. `session.logger` detects this and prints a one-time warning to stderr when it happens. To avoid the duplication, set `sessionLogs: { consoleEnabled: false }` in that environment's config (or the `SERVERPOD_SESSION_CONSOLE_LOG_ENABLED` env var), unless you actually want both.
+
+## Where your log data goes
+
+Every log call is written to **two** places, filtered differently. `payload` reads
+like a stdout-only channel - it isn't.
+
+| | Serverpod session log (`session.log`) | Your `LogWriter` |
+| --- | --- | --- |
+| What is sent | one flattened string: message + labels + payload | structured message, labels, payload, exception, stack trace, trace ids |
+| Where it ends up | your database's session-log table, and Serverpod Insights | wherever the writer sends it (stdout JSON, console, your own sink) |
+| Filtered by `minimumLevel` | **No** | Yes |
+| Filtered by Serverpod's own log settings | Yes | No |
+| Redaction applied | Yes | Yes |
+
+> **`payload` and `labels` are persisted to your database on every log call, regardless of which writer you configure.** `minimumLevel` gates the writer only - setting `minimumLevel: LogLevel.error` does **not** stop a `debug` call's payload from reaching the session-log table. Use Serverpod's own `sessionLogs` settings for that. If a value must never be persisted, keep it out of `payload`/`labels`, or add its key to `redactKeys`.
+
+### Redacting sensitive data
+
+`redactKeys` enforces redaction once, at configuration time, instead of relying on every call site to remember:
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const GcpJsonLogWriter(),
+  redactKeys: {'password', 'authorization', 'email'},
+);
+
+session.logger.info('login', payload: {'user': 'ada', 'password': 'hunter2'});
+// writer:      {"message":"login","payload":{"user":"ada","password":"[redacted]"}}
+// session log: login | payload: user=ada, password=[redacted]
+```
+
+Matching is case-insensitive and applies at any depth. A matching key holding a map has its whole subtree replaced, so `redactKeys: {'auth'}` collapses `auth: {token: ..., refresh: ...}` to one placeholder.
+
+For rules a key list can't express, pass a `redactor`. It runs *after* `redactKeys`, and returning the value it was given means "leave this alone":
+
+```dart
+ServerpodLoggerPlus.configure(
+  productionWriter: const GcpJsonLogWriter(),
+  redactKeys: {'password'},
+  redactor: (key, value) =>
+      value is String && _looksLikeACardNumber(value) ? '[card]' : value,
+);
+```
+
+A redactor that throws fails closed: the value is replaced with the placeholder and the error goes to stderr.
+
+> **Redaction applies to `payload` and `labels` keys only.** It does not scan the message string, `exception.toString()`, or the stack trace. A secret interpolated into a message - or carried by an exception's own `toString()` - still reaches both sinks. Scanning free text is false-positive-prone, so it's deliberately left to you.
 
 ## API
 
@@ -121,6 +172,22 @@ await session.logger.info('Finished request'); // still tagged, anywhere
 ```
 
 Every later `session.logger` on that `Session` carries the bound context. `bindLogger` also returns the enriched logger if you want a direct reference, but you don't need to keep it - the point is the side effect on `session.logger`.
+
+When the enrichment should end with a block of work rather than run to the end of the request, use `session.runWithLogger(...)`:
+
+```dart
+await session.runWithLogger(
+  () async {
+    session.logger.info('charging');   // carries step=charge
+    await chargeCard();
+  },
+  labels: {'step': 'charge'},
+);
+
+session.logger.info('done');           // no step label
+```
+
+The scope is carried by a `Zone`, so it survives `await`, nests, and two concurrent branches under `Future.wait` each see their own. Calling `bindLogger` inside a scope unwinds with it. Work started inside the scope but never awaited keeps the scoped logger, since the scope follows the asynchronous context rather than the call.
 
 > Note: the class is named `LoggerPlus`, not `Logger` - `package:serverpod` already exports its own `Logger` (from `relic_core`, used internally for HTTP request logging), so naming ours `Logger` would collide with it in every file that imports both packages.
 

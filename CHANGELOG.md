@@ -1,3 +1,32 @@
+## 0.5.0
+
+- New `redactKeys`, `redactor` and `redactionPlaceholder` options on
+  `ServerpodLoggerPlus.configure`. Redaction is applied ahead of both sinks, so a
+  redacted value reaches neither your `LogWriter` nor Serverpod's session-log
+  table. Key matching is case-insensitive and applies at any nesting depth. It
+  does not scan the message string, an exception's `toString()`, or the stack
+  trace.
+- The string sent to `Session.log` now runs through `toJsonSafe`, matching the
+  structured writers: a `DateTime`, `UuidValue` or generated model is no longer
+  `toString()`-dumped into the database, and a nested map reads as JSON. Values
+  containing the format's separators are quoted.
+- Flattened values are capped at `flattenValueMaxLength` (default 1024,
+  configurable), and the whole line is capped too. The `LogWriter` still
+  receives untruncated data.
+- `toJsonSafe` now stops at a maximum nesting depth, so a cyclic payload no
+  longer overflows the stack.
+- New `session.runWithLogger(body, labels:, payload:)`, a scoped alternative to
+  `bindLogger` that restores the previous logger when the block ends.
+- New exported `logSeverityRank`. `minimumLevel` filtering no longer depends on
+  the declaration order of Serverpod's `LogLevel` enum.
+- README: new **Where your log data goes** section, documenting that `payload`
+  and `labels` are persisted on every call regardless of writer, and that
+  `minimumLevel` gates only the writer.
+
+## 0.4.1
+
+- Documentation only: rewrote `README.md`. No library changes.
+
 ## 0.4.0
 
 - New `session.bindLogger(labels:, payload:)` that enriches `session.logger` in
