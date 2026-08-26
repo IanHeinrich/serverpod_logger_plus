@@ -3,7 +3,10 @@ import 'dart:io';
 
 import 'package:serverpod/serverpod.dart';
 
+import 'flatten.dart';
+import 'log_severity.dart';
 import 'log_writer.dart';
+import 'redaction.dart';
 
 /// The core structured logging engine.
 ///
@@ -32,6 +35,8 @@ class LoggerPlus {
   final LogLevel? _minimumLevel;
   final String? _traceId;
   final String? _spanId;
+  final int _flattenValueMaxLength;
+  final RedactionPolicy _redaction;
   bool _requestLoggingRegistered = false;
 
   LoggerPlus(
@@ -42,12 +47,16 @@ class LoggerPlus {
     LogLevel? minimumLevel,
     String? traceId,
     String? spanId,
+    int flattenValueMaxLength = defaultFlattenValueMaxLength,
+    RedactionPolicy? redaction,
   })  : _writer = writer,
         _boundLabels = Map.unmodifiable(labels ?? const {}),
         _boundPayload = Map.unmodifiable(payload ?? const {}),
         _minimumLevel = minimumLevel,
         _traceId = traceId,
-        _spanId = spanId;
+        _spanId = spanId,
+        _flattenValueMaxLength = flattenValueMaxLength,
+        _redaction = redaction ?? RedactionPolicy.none;
 
   /// Labels currently bound to this logger.
   Map<String, String> get boundLabels => _boundLabels;
@@ -75,6 +84,8 @@ class LoggerPlus {
       minimumLevel: _minimumLevel,
       traceId: _traceId,
       spanId: _spanId,
+      flattenValueMaxLength: _flattenValueMaxLength,
+      redaction: _redaction,
     );
   }
 
@@ -182,22 +193,30 @@ class LoggerPlus {
     StackTrace? stackTrace,
   }) async {
     final timestamp = DateTime.now();
-    final mergedLabels = {..._boundLabels, ...?labels};
-    final mergedPayload = {..._boundPayload, ...?payload};
+    final mergedLabels =
+        _redaction.applyToLabels({..._boundLabels, ...?labels});
+    final mergedPayload =
+        _redaction.applyToPayload({..._boundPayload, ...?payload});
 
     // The session log is always written; Serverpod applies its own log
     // settings to decide what reaches the database/Insights. The minimum
     // level here only gates this package's writer, so it can suppress
     // low-severity stdout noise (and its cost) without affecting Insights.
     _session.log(
-      _flatten(message, labels: mergedLabels, payload: mergedPayload),
+      flattenLogMessage(
+        message,
+        labels: mergedLabels,
+        payload: mergedPayload,
+        valueMaxLength: _flattenValueMaxLength,
+      ),
       level: severity,
       exception: exception,
       stackTrace: stackTrace,
     );
 
     final minimumLevel = _minimumLevel;
-    if (minimumLevel != null && severity.index < minimumLevel.index) {
+    if (minimumLevel != null &&
+        logSeverityRank(severity) < logSeverityRank(minimumLevel)) {
       return;
     }
 
@@ -251,23 +270,5 @@ class LoggerPlus {
           ..writeln(writerStackTrace.toString());
       }),
     );
-  }
-
-  String _flatten(
-    String message, {
-    required Map<String, String> labels,
-    required Map<String, dynamic> payload,
-  }) {
-    String joinEntries(Map<dynamic, dynamic> map) =>
-        map.entries.map((entry) => '${entry.key}=${entry.value}').join(', ');
-
-    final buffer = StringBuffer(message);
-    if (labels.isNotEmpty) {
-      buffer.write(' | labels: ${joinEntries(labels)}');
-    }
-    if (payload.isNotEmpty) {
-      buffer.write(' | payload: ${joinEntries(payload)}');
-    }
-    return buffer.toString();
   }
 }

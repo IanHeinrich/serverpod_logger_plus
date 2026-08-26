@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:serverpod/serverpod.dart';
 import 'package:serverpod_logger_plus/src/json_safe.dart';
 import 'package:test/test.dart';
@@ -74,6 +76,57 @@ void main() {
       () {
         final result = toJsonSafe(_Unserializable());
         expect(result, 'unserializable');
+      },
+    );
+
+    test(
+      'when given a cyclic map, then it terminates with a depth marker',
+      () {
+        final cyclic = <String, dynamic>{'name': 'root'};
+        cyclic['self'] = cyclic;
+
+        expect(() => toJsonSafe(cyclic), returnsNormally);
+        expect(jsonEncode(toJsonSafe(cyclic)), contains(maxDepthMarker));
+      },
+    );
+
+    test(
+      'when given a cyclic list, then it terminates with a depth marker',
+      () {
+        final cyclic = <dynamic>[1];
+        cyclic.add(cyclic);
+
+        expect(() => toJsonSafe(cyclic), returnsNormally);
+        expect(jsonEncode(toJsonSafe(cyclic)), contains(maxDepthMarker));
+      },
+    );
+
+    test(
+      'when nesting is within maxDepth, then no marker is substituted',
+      () {
+        final nested = {
+          'a': {
+            'b': {'c': 1}
+          }
+        };
+
+        expect(jsonEncode(toJsonSafe(nested)), '{"a":{"b":{"c":1}}}');
+      },
+    );
+
+    test(
+      'when maxDepth is lowered, then deeper values are replaced',
+      () {
+        final nested = {
+          'a': {
+            'b': {'c': 1}
+          }
+        };
+
+        expect(
+          jsonEncode(toJsonSafe(nested, maxDepth: 2)),
+          '{"a":{"b":"$maxDepthMarker"}}',
+        );
       },
     );
   });
