@@ -241,6 +241,61 @@ void main() {
         expect(session.singleLoggedMessage, contains('hunter2'));
       },
     );
+
+    test(
+      'when a redactor scrubs email addresses, '
+      'then an email in the exception text reaches neither sink',
+      () async {
+        final session = RecordingSession();
+        final writer = RecordingLogWriter();
+        final email = RegExp(r'[\w.+-]+@[\w-]+\.[\w.]+');
+        final logger = LoggerPlus(
+          session,
+          writer: writer,
+          redaction: RedactionPolicy(
+            redactor: (key, value) =>
+                value is String ? value.replaceAll(email, '[email]') : value,
+          ),
+        );
+
+        await logger.error(
+          'insert failed',
+          exception: const FormatException(
+            'duplicate key: Key (email)=(x@y.com) already exists',
+          ),
+        );
+        await settle();
+
+        final sessionError = session.logs.single.exception.toString();
+        final writerError = writer.single.exception.toString();
+        expect(sessionError, isNot(contains('x@y.com')));
+        expect(sessionError, contains('Key (email)=([email])'));
+        expect(writerError, isNot(contains('x@y.com')));
+        expect(writerError, contains('Key (email)=([email])'));
+        expect(writer.single.exception.runtimeType, FormatException);
+      },
+    );
+
+    test(
+      'when no redactor is configured, '
+      'then the exception reaches both sinks unchanged',
+      () async {
+        final session = RecordingSession();
+        final writer = RecordingLogWriter();
+        final logger = LoggerPlus(
+          session,
+          writer: writer,
+          redaction: RedactionPolicy(keys: {'password'}),
+        );
+        final exception = StateError('Key (email)=(x@y.com) already exists');
+
+        await logger.error('insert failed', exception: exception);
+        await settle();
+
+        expect(session.logs.single.exception, same(exception));
+        expect(writer.single.exception, same(exception));
+      },
+    );
   });
 
   group('Given a LoggerPlus with request logging registered', () {

@@ -50,8 +50,10 @@ abstract final class ServerpodLoggerPlus {
   ///
   /// [redactor] handles rules a key list cannot express. It runs *after*
   /// [redactKeys] and is never called for a key that already matched. Return
-  /// the value it was given to leave it alone. See [RedactionPolicy] for what
-  /// redaction does and does not cover.
+  /// the value it was given to leave it alone. It is also called with
+  /// [exceptionRedactionKey] (`'exception'`) and a logged exception's
+  /// `toString()` text, and what it returns is what both sinks receive as the
+  /// error. See [RedactionPolicy] for what redaction does and does not cover.
   static void configure({
     required LogWriter productionWriter,
     LogLevel? minimumLevel,
