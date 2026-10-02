@@ -19,7 +19,7 @@ You still get Insights, plus structured logs your cloud provider can actually qu
 
 ```yaml
 dependencies:
-  serverpod_logger_plus: ^0.5.1
+  serverpod_logger_plus: ^0.5.2
 
 ```
 
@@ -84,7 +84,7 @@ No manual wiring per-endpoint: `session.logger` is a zero-boilerplate extension 
 | **`bindTraceContext`** | Enables automatic log-to-trace linking. Each built-in writer maps the extracted IDs to its provider's reserved trace fields. |
 | **`traceContextExtractor`** | An override callback for bespoke trace headers. You can return `extractTraceContext(session)` from inside it as a fallback. |
 | **`redactKeys`** | Label/payload keys whose values must never be logged. Case-insensitive, applied at any nesting depth, to *both* sinks. |
-| **`redactor`** | A callback for rules a key list can't express (e.g. masking anything shaped like a card number). Runs *after* `redactKeys`, on what survived. |
+| **`redactor`** | A callback for rules a key list can't express (e.g. masking anything shaped like a card number). Runs *after* `redactKeys`, on what survived, and over the text of a logged exception. |
 | **`redactionPlaceholder`** | What a redacted value is replaced with. Defaults to `[redacted]`. |
 | **`flattenValueMaxLength`** | Caps each label/payload value in the string written to Serverpod's session log. Defaults to 1024. *The `LogWriter` still receives untruncated data.* |
 
@@ -141,7 +141,25 @@ ServerpodLoggerPlus.configure(
 
 A redactor that throws fails closed: the value is replaced with the placeholder and the error goes to stderr.
 
-> **Redaction applies to `payload` and `labels` keys only.** It does not scan the message string, `exception.toString()`, or the stack trace. A secret interpolated into a message - or carried by an exception's own `toString()` - still reaches both sinks. Scanning free text is false-positive-prone, so it's deliberately left to you.
+The redactor also sees the text of the `exception` passed to `warning`, `error` or `fatal`, called with the key `'exception'` (`exceptionRedactionKey`) and `exception.toString()`. Database errors are the usual reason to want this, since they quote the offending row:
+
+```dart
+final _email = RegExp(r'[\w.+-]+@[\w-]+\.[\w.]+');
+
+ServerpodLoggerPlus.configure(
+  productionWriter: const GcpJsonLogWriter(),
+  redactor: (key, value) =>
+      value is String ? value.replaceAll(_email, '[email]') : value,
+);
+
+session.logger.error('insert failed', exception: e);
+// e.toString():  ... Key (email)=(x@y.com) already exists
+// both sinks:    ... Key (email)=([email]) already exists
+```
+
+When the text comes back changed, both sinks receive a `RedactedException` in place of the original: its `toString()` is the redacted text (what Serverpod stores as the session log's error), and its `runtimeType` is the original exception's type, so writers still report `error.kind` and the like. Returning `null` drops the exception. Without a `redactor`, the exception is passed through as it was and never stringified.
+
+> **Redaction covers `payload` and `labels`, plus exception text when you configure a `redactor`.** `redactKeys` never applies to exception text, and neither the message string nor the stack trace is scanned. A secret interpolated into a message still reaches both sinks. Scanning free text is false-positive-prone, so it's deliberately left to you.
 
 ## API
 

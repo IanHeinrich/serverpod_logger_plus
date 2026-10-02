@@ -197,6 +197,7 @@ class LoggerPlus {
         _redaction.applyToLabels({..._boundLabels, ...?labels});
     final mergedPayload =
         _redaction.applyToPayload({..._boundPayload, ...?payload});
+    final redactedException = _redaction.applyToException(exception);
 
     // The session log is always written; Serverpod applies its own log
     // settings to decide what reaches the database/Insights. The minimum
@@ -210,7 +211,7 @@ class LoggerPlus {
         valueMaxLength: _flattenValueMaxLength,
       ),
       level: severity,
-      exception: exception,
+      exception: redactedException,
       stackTrace: stackTrace,
     );
 
@@ -226,7 +227,7 @@ class LoggerPlus {
       severity: severity,
       payload: mergedPayload.isEmpty ? null : mergedPayload,
       labels: mergedLabels.isEmpty ? null : mergedLabels,
-      exception: exception,
+      exception: redactedException,
       stackTrace: stackTrace,
       traceId: _traceId,
       spanId: _spanId,

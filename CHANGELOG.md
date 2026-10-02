@@ -1,3 +1,16 @@
+## 0.5.2
+
+- The configured `redactor` now also runs over a logged exception's text. It is
+  called with the key `'exception'` (exported as `exceptionRedactionKey`) and
+  `exception.toString()`, so a Postgres error such as
+  `Key (email)=(x@y.com) already exists` can be scrubbed before it reaches
+  Serverpod's session-log table or your `LogWriter`. When the redactor changes
+  the text, both sinks receive a `RedactedException` whose `toString()` is the
+  new text and whose `runtimeType` is the original exception's type. Returning
+  `null` drops the exception. Without a `redactor` the exception is passed
+  through untouched and is not stringified. `redactKeys` does not apply to
+  exception text, and stack traces are not scanned.
+
 ## 0.5.1
 
 - Supports Serverpod 4.0.x as well as 3.4.x: the `serverpod` constraint is now

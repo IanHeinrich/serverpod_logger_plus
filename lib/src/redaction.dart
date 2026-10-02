@@ -7,10 +7,33 @@ const String defaultRedactionPlaceholder = '[redacted]';
 
 const String redactionMaxDepthMarker = '[max depth exceeded]';
 
-/// Called with each label/payload key and value. Return a replacement, or
-/// return the value itself to leave it alone - identity is how "no change" is
-/// signalled, and only an unchanged value is walked into.
+/// The key a [Redactor] is called with for an exception's `toString()` text.
+const String exceptionRedactionKey = 'exception';
+
+/// Called with each label/payload key and value, and with
+/// [exceptionRedactionKey] and the text of a logged exception. Return a
+/// replacement, or return the value itself to leave it alone - identity is how
+/// "no change" is signalled, and only an unchanged value is walked into.
 typedef Redactor = Object? Function(String key, Object? value);
+
+/// Stands in for a logged exception whose text a [Redactor] changed.
+///
+/// [toString] returns the redacted text, which is what `Session.log` persists
+/// and what the built-in writers emit. [runtimeType] reports the original
+/// exception's type, so writers that record the error's type keep doing so.
+final class RedactedException implements Exception {
+  const RedactedException(this.message, {required this.originalType});
+
+  final String message;
+
+  final Type originalType;
+
+  @override
+  Type get runtimeType => originalType;
+
+  @override
+  String toString() => message;
+}
 
 /// Removes sensitive values from labels and payload before they are logged.
 ///
@@ -21,9 +44,10 @@ typedef Redactor = Object? Function(String key, Object? value);
 /// Key matching is **case-insensitive**, since field casing varies in practice
 /// (`Authorization` vs `authorization`) and a missed match leaks data.
 ///
-/// This does **not** scan the log message, an exception's `toString()`, or the
-/// stack trace. Scanning free text is false-positive-prone and is the caller's
-/// responsibility.
+/// A [Redactor] also receives a logged exception's `toString()` text, under
+/// [exceptionRedactionKey]; see [applyToException]. Key matching never applies
+/// to it, and neither the log message nor the stack trace is scanned. Scanning
+/// free text is false-positive-prone and is the caller's responsibility.
 final class RedactionPolicy {
   /// A policy that redacts nothing. Applying it returns the same map instance.
   static const RedactionPolicy none = RedactionPolicy._(
@@ -101,6 +125,25 @@ final class RedactionPolicy {
       }
     }
     return result ?? labels;
+  }
+
+  /// Runs [exception]'s `toString()` through the [Redactor].
+  ///
+  /// Returns [exception] itself, without stringifying it, when there is no
+  /// redactor, and when the redactor leaves the text unchanged. Otherwise
+  /// returns a [RedactedException] carrying the new text, or `null` if the
+  /// redactor returned `null`, which drops the exception from both sinks.
+  Object? applyToException(Object? exception) {
+    if (redactor == null || exception == null) return exception;
+
+    final text = exception.toString();
+    final Object? redacted = _applyRedactor(exceptionRedactionKey, text);
+    if (redacted == text) return exception;
+    if (redacted == null) return null;
+    return RedactedException(
+      redacted is String ? redacted : stringifyLogValue(redacted),
+      originalType: exception.runtimeType,
+    );
   }
 
   Object? _redactValue(String key, Object? value, int depth) {
