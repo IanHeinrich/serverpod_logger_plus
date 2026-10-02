@@ -1,3 +1,9 @@
+## 0.5.1
+
+- Supports Serverpod 4.0.x as well as 3.4.x: the `serverpod` constraint is now
+  `>=3.4.0 <5.0.0`. No library changes were needed; the `Session`, `LogLevel`
+  and request-header APIs this package uses are unchanged in Serverpod 4.
+
 ## 0.5.0
 
 - New `redactKeys`, `redactor` and `redactionPlaceholder` options on

@@ -63,9 +63,9 @@ class RecordingSession implements Session {
     return logs.single.message;
   }
 
-  // `metadata` does not exist on Session.log in serverpod 3.4, but does on
-  // their main branch. An override may add extra optional named parameters and
-  // stay a valid subtype, so declaring it now survives a `pub upgrade`.
+  // `metadata` exists on Session.log from Serverpod 4 only. An override may add
+  // extra optional named parameters and stay a valid subtype, so this still
+  // compiles against Serverpod 3.4.
   @override
   void log(
     String message, {
