@@ -1,3 +1,10 @@
+## 0.5.3
+
+- Widens the `serverpod` constraint to `>=3.0.0 <5.0.0`, so apps still on
+  Serverpod 3.0-3.3 can use the package. No library changes were needed; CI
+  now also runs the analyzer and tests against Serverpod 3.0.0 and the newest
+  3.x release.
+
 ## 0.5.2
 
 - The configured `redactor` now also runs over a logged exception's text. It is

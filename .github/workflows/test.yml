@@ -49,3 +49,32 @@ jobs:
         run: dart pub publish --dry-run
         continue-on-error: true
 
+  # The `test` job resolves the newest Serverpod in range. This one pins the
+  # older end of the supported range so a change that relies on a newer
+  # Serverpod API is caught here instead of by users on Serverpod 3.
+  serverpod-compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # "3.0.0" is the declared floor; the range resolves the newest 3.x.
+        serverpod: ["3.0.0", ">=3.0.0 <4.0.0"]
+    name: serverpod ${{ matrix.serverpod }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Pin Serverpod
+        run: |
+          dart pub add "serverpod:${{ matrix.serverpod }}"
+          dart pub upgrade
+
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+      - name: Run tests
+        run: dart test
+

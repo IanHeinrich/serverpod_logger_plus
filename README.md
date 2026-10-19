@@ -19,11 +19,11 @@ You still get Insights, plus structured logs your cloud provider can actually qu
 
 ```yaml
 dependencies:
-  serverpod_logger_plus: ^0.5.2
+  serverpod_logger_plus: ^0.5.3
 
 ```
 
-Works with Serverpod 3.4.x and 4.x.
+Works with Serverpod 3.x (3.0.0 and later) and 4.x.
 
 ## Quickstart & Configuration
 
